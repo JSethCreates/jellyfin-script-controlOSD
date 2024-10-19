@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v2.0.2</title>
+    <style>
+        /* Updated Keyboard Navigation Highlight */
+        .keyboard-nav-highlight {
+            position: relative; /* Needed for the pseudo-element */
+            border: 2px solid blue; /* The static blue border */
+            box-sizing: border-box; /* Include border in element's total width and height */
+            transition: border-color 0.3s ease; /* Smooth transition for border color */
+            /* Removed transform to prevent growth */
+        }
+
+        /* Pseudo-element for animated glow effect */
+        .keyboard-nav-highlight::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 2px solid transparent; /* Transparent border for animation */
+            border-radius: 5px; /* Adjust for rounding if needed */
+            box-shadow: 0 0 15px 7px rgba(0, 0, 255, 0.8); /* Enhanced blue glow */
+            animation: border-glow 1.5s linear infinite; /* Faster and more visible animation */
+            pointer-events: none; /* Prevents pseudo-element from affecting interactions */
+            z-index: 2; /* Ensures the glow is above the item */
+            box-sizing: border-box; /* Ensure the pseudo-element doesn't affect layout */
+        }
+
+        /* Keyframes for the animated glow */
+        @keyframes border-glow {
+            0% {
+                border-color: transparent blue blue transparent;
+            }
+            25% {
+                border-color: blue blue transparent transparent;
+            }
+            50% {
+                border-color: blue transparent transparent blue;
+            }
+            75% {
+                border-color: transparent transparent blue blue;
+            }
+            100% {
+                border-color: transparent blue blue transparent;
+            }
+        }
+
+        /* Optional hover effect */
+        .keyboard-nav-highlight:hover {
+            /* No scaling to prevent shifting */
+            /* You can add other hover effects here if desired */
+        }
+
+        /* Styles specific to video player highlights */
+        .keyboard-nav-highlight.video-player {
+            background-color: transparent !important;
+            border: none; /* Remove border for video players */
+        }
+
+        .highlight-chevron { 
+            background-color: #0000ff !important; /* Changed to blue */
+        }
+
+        /* Ensure that items within iframes do not receive the highlight styles */
+        .featurediframe .keyboard-nav-highlight { 
+            /* No styles needed as the class is not applied to iframes */
+            /* Keeping this for any future overrides */
+            transform: none !important; 
+            box-shadow: none !important;
+            background-color: none !important;
+            border: none !important; 
+        }
+
+        .featurediframe { 
+            width: 93vw; 
+            height: 320px; 
+            display: block; 
+            border: 0;
+            margin: -50px auto 15px;
+            position: relative;
+        }
+
+        /* Styles for Video Focused Play/Pause Icon */
+        .video-focused {
+            position: relative;
+        }
+
+        .video-focused::after {
+            content: '⏯'; /* Unicode Play/Pause Symbol */
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            pointer-events: none; /* Ensure the icon doesn't interfere with interactions */
+            z-index: 5; /* Ensure the icon is above the video */
+        }
+
+        /* Ensure the video player is positioned relative for the icon */
+        .video-player {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const jellyfin = (() => { 
+                    try { 
+                        return window.parent.document ? window.parent : window; 
+                    } catch (e) { 
+                        return window; 
+                    } 
+                })();
+
+                // Force TV Mode by adjusting classes and injecting custom styles
+                function forceTVMode() {
+                    jellyfin.document.documentElement.classList.remove('layout-desktop');
+                    jellyfin.document.documentElement.classList.add('layout-tv');
+                    const style = jellyfin.document.createElement('style');
+                    style.textContent = `
+                        .layout-tv { font-size: 88% !important; }
+                        @media (min-width: 43.75em) {
+                            .layout-tv {
+                                justify-content: center; /* Centers horizontally */
+                            }
+                            .layout-tv .headerTabs {
+                                margin: -4.0em auto 0 auto !important;
+                                width: fit-content !important;
+                            }
+                        }
+                        .skinHeader-withBackground {
+                            background-color: #00000000 !important;
+                        }
+                    `;
+                    jellyfin.document.head.appendChild(style);
+                }
+
+                // Initialize forceTVMode
+                forceTVMode();
+
+                let isInitialized = false, currentLocation = '', previousElement = null, skipFocusReset = false;
+                let focusableElements = [], currentRow = -1, currentCol = -1;
+                const highlightColor = '#0000ff'; // Blue
+                const selectors = `.itemsContainer .cardScalable, .emby-scrollbuttons-button, .mainDetailButtons .detailButton, .buttons .paper-icon-button-light, .playerControlsContainer button, .playerControlsContainer a, .emby-tabs-slider button, .headerRight button, .headerLeft button, .clickable-overlay, .video-player, #leftButton, #rightButton`;
+
+                let debounceTimer;
+
+                // Adds custom styles to the specified document.
+                const addStyles = (doc, isIframe = false) => {
+                    if (!doc.getElementById('tv-nav-styles')) {
+                        const style = doc.createElement('style');
+                        style.id = 'tv-nav-styles';
+                        style.textContent = `
+                            .keyboard-nav-highlight {
+                                /* Removed grow and old box-shadow effects */
+                                border: 2px solid blue !important;
+                                box-sizing: border-box;
+                                transition: border-color 0.3s ease;
+                                position: relative;
+                            }
+                            .keyboard-nav-highlight::before {
+                                /* Pseudo-element for animated blue glow */
+                                content: '';
+                                position: absolute;
+                                top: 0;
+                                left: 0;
+                                width: 100%;
+                                height: 100%;
+                                border: 2px solid transparent;
+                                border-radius: 5px;
+                                box-shadow: 0 0 15px 7px rgba(0, 0, 255, 0.8); /* Enhanced blue glow */
+                                animation: border-glow 1.5s linear infinite; /* Faster and more visible animation */
+                                pointer-events: none;
+                                z-index: 2;
+                                box-sizing: border-box;
+                            }
+                            @keyframes border-glow {
+                                0% {
+                                    border-color: transparent blue blue transparent;
+                                }
+                                25% {
+                                    border-color: blue blue transparent transparent;
+                                }
+                                50% {
+                                    border-color: blue transparent transparent blue;
+                                }
+                                75% {
+                                    border-color: transparent transparent blue blue;
+                                }
+                                100% {
+                                    border-color: transparent blue blue transparent;
+                                }
+                            }
+                            .highlight-chevron { background-color: #0000ff !important; }
+                            
+                            /* Styles for Video Focused Play/Pause Icon */
+                            .video-focused::after {
+                                content: '⏯';
+                                position: absolute;
+                                top: 10px;
+                                right: 10px;
+                                font-size: 24px;
+                                pointer-events: none;
+                                z-index: 2;
+                            }
+                            .video-player {
+                                position: relative;
+                                z-index: 1;
+                            }
+                        `;
+                        doc.head.appendChild(style);
+                    }
+                };
+
+                // Injects hover styles into the specified document's iframes.
+                const injectIframeHoverStyles = doc => {
+                    if (!doc.getElementById('iframe-hover-styles')) {
+                        const style = doc.createElement('style');
+                        style.id = 'iframe-hover-styles';
+                        style.textContent = `
+                            .slide.hover .logo { transform: translateY(-50%) translateX(-50%) scale(1.35) !important; }
+                            .slide.hover .lorem-ipsum { opacity: 1; }
+                        `;
+                        doc.head.appendChild(style);
+                    }
+                };
+
+                // Toggles the hover state on a slide element within the document.
+                const toggleHover = (doc, add = true) => {
+                    const slide = doc.querySelector('.slide');
+                    if (slide) slide.classList.toggle('hover', add);
+                };
+
+                // Checks if an element is visible and interactable.
+                const isElementVisible = el => el.offsetParent && !['input','textarea'].includes(el.tagName.toLowerCase()) && el.offsetWidth > 0 && el.offsetHeight > 0;
+
+                // Updates the list of focusable elements by scanning the document and excluding iframes.
+                const updateFocusableElements = () => {
+                    const elements = Array.from(jellyfin.document.querySelectorAll(selectors));
+                    let processed = [];
+                    elements.forEach(el => {
+                        if (el.tagName.toLowerCase() === 'iframe') {
+                            // Exclude iframes from receiving highlight
+                            return;
+                        }
+                        if (el.classList.contains('featurediframe')) {
+                            // Exclude featured iframes
+                            return;
+                        }
+                        if (isElementVisible(el)) {
+                            const rect = el.getBoundingClientRect();
+                            processed.push({ element: el, top: rect.top, left: rect.left });
+                        }
+                    });
+
+                    // Now, handle focusable elements within iframes
+                    jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
+                        try {
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            if (iframeDoc) {
+                                addStyles(iframeDoc, true);
+                                injectIframeHoverStyles(iframeDoc);
+                                const iframeElements = Array.from(iframeDoc.querySelectorAll(selectors))
+                                    .filter(isElementVisible);
+                                iframeElements.forEach(innerEl => {
+                                    const rect = innerEl.getBoundingClientRect();
+                                    processed.push({ element: innerEl, top: rect.top, left: rect.left, iframe: iframe });
+                                });
+                            }
+                        } catch (error) {
+                            console.error('Error accessing iframe content:', error);
+                        }
+                    });
+
+                    processed.sort((a, b) => a.top !== b.top ? a.top - b.top : a.left - b.left);
+                    let grid = [], row = [], lastTop = -1, threshold = 10;
+                    processed.forEach(item => {
+                        if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
+                            if (row.length) grid.push(row);
+                            row = [item.element];
+                            lastTop = item.top;
+                        } else { 
+                            row.push(item.element); 
+                        }
+                    });
+                    if (row.length) grid.push(row);
+                    focusableElements = grid;
+                };
+
+                // Scrolls the specified element into view with smooth behavior and adjusts carousel scrolling if necessary.
+                const scrollIntoView = el => {
+                    if (!el) return;
+                    requestAnimationFrame(() => {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                        const carousel = el.closest('.emby-scroller');
+                        if (carousel) {
+                            const cr = carousel.getBoundingClientRect(), er = el.getBoundingClientRect(), buffer = 100;
+                            if (er.left < cr.left + buffer) {
+                                carousel.scrollBy({ left: er.left - cr.left - buffer, behavior: 'smooth' });
+                            }
+                            if (er.right > cr.right - buffer) {
+                                carousel.scrollBy({ left: er.right - cr.right + buffer, behavior: 'smooth' });
+                            }
+                        }
+                    });
+                };
+
+                // Moves the fake focus in the specified direction and updates the highlighted element.
+                const moveFocus = (dr, dc) => {
+                    if (!focusableElements.length) return;
+                    let nr = (currentRow + dr + focusableElements.length) % focusableElements.length;
+                    if (focusableElements[nr]) {
+                        let nc = (currentCol + dc + focusableElements[nr].length) % focusableElements[nr].length;
+                        const newEl = focusableElements[nr][nc];
+                        if (previousElement) {
+                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
+                            if (previousElement.classList.contains('video-player')) {
+                                previousElement.classList.remove('video-focused');
+                            }
+                            if (previousElement.classList.contains('clickable-overlay')) {
+                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                                if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+                            }
+                        }
+                        newEl.classList.add('keyboard-nav-highlight');
+                        if (newEl.classList.contains('emby-scrollbuttons-button')) newEl.classList.add('highlight-chevron');
+                        if (newEl.classList.contains('video-player')) newEl.classList.add('video-focused');
+                        scrollIntoView(newEl);
+                        if (newEl.classList.contains('clickable-overlay')) {
+                            const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                            if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
+                        }
+                        currentRow = nr;
+                        currentCol = nc;
+                        previousElement = newEl;
+                    }
+                };
+
+                // Initializes the focus by selecting the first focusable element based on specific conditions.
+                const initializeFocus = () => {
+                    updateFocusableElements();
+                    let first = null;
+                    if (window.top.location.href.includes('index.html#/video')) {
+                        first = Array.from(jellyfin.document.querySelectorAll('button.btnPause.autoSize.paper-icon-button-light[title="Pause (K)"]')).find(isElementVisible);
+                    }
+                    if (!first) {
+                        for (const sel of ['button[is="emby-button"][data-action="resume"]','button[is="emby-button"][data-action="play"]','.itemsContainer .cardScalable']) { 
+                            const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible); 
+                            if (elems.length) { first = elems[0]; break; } 
+                        }
+                    }
+                    if (!first && focusableElements.length && focusableElements[0].length) {
+                        first = focusableElements[0][0];
+                    }
+                    if (first) {
+                        if (previousElement && previousElement !== first) {
+                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
+                            if (previousElement.classList.contains('clickable-overlay')) {
+                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                                if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+                            }
+                        }
+                        first.classList.add('keyboard-nav-highlight');
+                        if (first.classList.contains('emby-scrollbuttons-button')) first.classList.add('highlight-chevron');
+                        if (first.classList.contains('video-player')) first.classList.add('video-focused');
+                        scrollIntoView(first);
+                        if (first.classList.contains('clickable-overlay')) {
+                            const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                            if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
+                        }
+                        for (let i = 0; i < focusableElements.length; i++) {
+                            const ci = focusableElements[i].indexOf(first);
+                            if (ci !== -1) { 
+                                currentRow = i; 
+                                currentCol = ci; 
+                                break; 
+                            }
+                        }
+                        previousElement = first;
+                    } else { 
+                        currentRow = currentCol = -1; 
+                    }
+                };
+
+                // Handles the Enter key press by either toggling video playback or navigating into iframes.
+                const handleEnter = async () => {
+                    if (currentRow === -1 || currentCol === -1) { 
+                        initializeFocus(); 
+                        return; 
+                    }
+                    const active = focusableElements[currentRow][currentCol];
+                    
+                    if (active.classList.contains('video-player') || active.querySelector('.video-player')) {
+                        const spotlightIframe = jellyfin.document.querySelector('.featurediframe');
+                        if (spotlightIframe?.contentWindow?.controlYouTubePlayer) {
+                            spotlightIframe.contentWindow.controlYouTubePlayer.toggle();
+                            skipFocusReset = true;
+                        }
+                    } else if (active.closest('.featurediframe')) {
+                        const spotlightIframe = jellyfin.document.querySelector('iframe.featurediframe');
+                        if (spotlightIframe) {
+                            try {
+                                // Wait for the iframe to load its content
+                                await new Promise((resolve, reject) => {
+                                    if (spotlightIframe.contentDocument.readyState === 'complete') {
+                                        resolve();
+                                    } else {
+                                        const onLoad = () => resolve();
+                                        spotlightIframe.addEventListener('load', onLoad, { once: true });
+                                        // Timeout after 5 seconds to prevent hanging
+                                        setTimeout(() => {
+                                            spotlightIframe.removeEventListener('load', onLoad);
+                                            reject(new Error('Iframe load timeout'));
+                                        }, 5000);
+                                    }
+                                });
+                                // Recalculate focusable elements within the iframe
+                                updateFocusableElements();
+                                // Optionally, set focus to a specific element within the iframe
+                                initializeFocus();
+                            } catch (error) {
+                                console.error('Error loading iframe content:', error);
+                            }
+                        }
+                    } else {
+                        (active.querySelector('a[href*="/web/index.html#!/item"], button, a') || active).click();
+                    }
+
+                    const isLR = ['leftButton','rightButton'].includes(active.id) || active.closest('#leftButton') || active.closest('#rightButton');
+                    if (isLR || skipFocusReset) {
+                        if (isLR) {
+                            skipFocusReset = true;
+                        }
+                        if (previousElement) { 
+                            previousElement.classList.add('keyboard-nav-highlight', 'highlight-chevron'); 
+                        }
+                        setTimeout(() => { 
+                            skipFocusReset = false; 
+                            updateFocusableElements(); 
+                        }, 1000);
+                    } else {
+                        if (previousElement) {
+                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
+                            if (previousElement.classList.contains('clickable-overlay')) {
+                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                                if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+                            }
+                        }
+                        previousElement = null;
+                        setTimeout(() => { 
+                            updateFocusableElements(); 
+                            initializeFocus(); 
+                        }, 1000);
+                    }
+                };
+
+                // Handles keydown events to manage navigation and actions based on arrow keys and Enter.
+                const handleKeydown = e => {
+                    const activeEl = jellyfin.document.activeElement, tag = activeEl.tagName.toLowerCase();
+                    if (['input','textarea'].includes(tag) || activeEl.isContentEditable) return;
+                    switch(e.key){
+                        case 'ArrowUp': moveFocus(-1,0); e.preventDefault(); break;
+                        case 'ArrowDown': moveFocus(1,0); e.preventDefault(); break;
+                        case 'ArrowLeft': moveFocus(0,-1); e.preventDefault(); break;
+                        case 'ArrowRight': moveFocus(0,1); e.preventDefault(); break;
+                        case 'Enter': handleEnter(); e.preventDefault(); e.stopPropagation(); break;
+                        default: break;
+                    }
+                };
+
+                // Handles the back navigation by re-initializing focusable elements after a delay.
+                const handleBack = () => setTimeout(() => { 
+                    if (!skipFocusReset) { 
+                        updateFocusableElements(); 
+                        initializeFocus(); 
+                    } 
+                }, 200);
+
+                // Sets up a Mutation Observer to watch for changes within the iframe and update focusable elements accordingly.
+                const observeIframeMutations = (iframe) => {
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (doc) {
+                            const observer = new MutationObserver(() => {
+                                if (!skipFocusReset) { 
+                                    clearTimeout(debounceTimer);
+                                    debounceTimer = setTimeout(() => {
+                                        updateFocusableElements(); 
+                                        initializeFocus(); 
+                                    }, 300); // Debounce by 300ms
+                                }
+                            });
+                            observer.observe(doc.body, { childList: true, subtree: true });
+                        }
+                    } catch (error) {
+                        console.error('Error setting up MutationObserver on iframe:', error);
+                    }
+                };
+
+                // Handles the loading of an iframe by adding styles, injecting hover styles, updating focusable elements,
+                // and setting up Mutation Observers and event listeners for dynamic content changes.
+                const handleIframeLoad = iframe => {
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (doc) { 
+                            addStyles(doc, true); 
+                            injectIframeHoverStyles(doc); 
+                            updateFocusableElements(); // Update focusable elements when iframe loads
+                            observeIframeMutations(iframe); // Start observing mutations
+
+                            // Listen for hash changes within the iframe
+                            iframe.contentWindow.addEventListener('hashchange', () => {
+                                if (!skipFocusReset) {
+                                    clearTimeout(debounceTimer);
+                                    debounceTimer = setTimeout(() => {
+                                        updateFocusableElements();
+                                        initializeFocus();
+                                    }, 300); // Debounce by 300ms
+                                }
+                            }, { passive: true });
+                        }
+                    } catch (error) {
+                        console.error('Error handling iframe load:', error);
+                    }
+                };
+
+                // Initializes the navigation script by setting up event listeners, Mutation Observers, and handling iframes.
+                const init = () => {
+                    jellyfin.document.documentElement.classList.replace('layout-desktop', 'layout-tv');
+                    addStyles(jellyfin.document);
+                    updateFocusableElements();
+                    jellyfin.document.removeEventListener('keydown', handleKeydown, true);
+                    jellyfin.document.addEventListener('keydown', handleKeydown, { passive: false, capture: true });
+                    window.removeEventListener('popstate', handleBack);
+                    window.addEventListener('popstate', handleBack, { passive: true });
+                    const observer = new MutationObserver(() => { 
+                        if (!skipFocusReset) { 
+                            clearTimeout(debounceTimer);
+                            debounceTimer = setTimeout(() => {
+                                updateFocusableElements(); 
+                                initializeFocus(); 
+                            }, 300); // Debounce by 300ms
+                        } 
+                    });
+                    observer.observe(jellyfin.document.body, { childList: true, subtree: true });
+                    jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
+                        handleIframeLoad(iframe);
+                        iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
+                    });
+                    isInitialized = true; 
+                    initializeFocus();
+                };
+
+                // Periodically checks for navigation changes and re-initializes the script if a change is detected.
+                const checkNav = () => {
+                    const newLoc = window.top.location.href + window.top.location.hash;
+                    if (newLoc !== currentLocation) { 
+                        currentLocation = newLoc; 
+                        isInitialized = false; 
+                        init(); 
+                    }
+                };
+
+                // Set up periodic navigation check every 100ms
+                setInterval(checkNav, 100);
+
+                // Listen for hash changes to re-initialize the script
+                window.addEventListener('hashchange', () => { 
+                    isInitialized = false; 
+                    init(); 
+                }, { passive: true });
+
+                // Initial initialization
+                init();
+            }, 250);
+        });
+    </script>
+</head>
+<body>
+    <iframe class="featurediframe" src="/web/ui/spotlight.html" tabindex="0"></iframe>
+</body>
+</html>
