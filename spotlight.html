@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v2.1.2</title>
+    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v3.0.1</title>
     <style>
         :root { --highlight-color: #6a00b3; }
         .keyboard-nav-highlight {
@@ -16,7 +16,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
-                let isInitialized = false, currentLocation = '', previousElement = null, skipFocusReset = false;
+                let isInitialized = false, currentLocation = '', previousElement = null, mutationObserver = null, skipFocusReset = false;
                 let focusableElements = [], currentRow = -1, currentCol = -1;
                 const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
                 const selectors = `.itemsContainer .cardScalable, .emby-scrollbuttons-button, .mainDetailButtons .detailButton, .buttons .paper-icon-button-light, .playerControlsContainer button, .playerControlsContainer a, .emby-tabs-slider button, .headerRight button, .headerLeft button, .clickable-overlay, .video-player, .featurediframe, #leftButton, #rightButton`;
@@ -220,7 +220,7 @@
                     }
                 };
 
-                const handleBack = () => setTimeout(() => { if (!skipFocusReset) { updateFocusableElements(); initializeFocus(); } }, 2500);
+                const handleBack = () => setTimeout(() => { if (!skipFocusReset) { isInitialized = false; init(); } }, 250);
 
                 const handleIframeLoad = iframe => {
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
@@ -247,32 +247,55 @@
 				};
 
                 const init = () => {
-                    forceTVMode();
-                    addStyles(jellyfin.document);
-                    updateFocusableElements();
-                    jellyfin.document.removeEventListener('keydown', handleKeydown, true);
-                    jellyfin.document.addEventListener('keydown', handleKeydown, { passive: false, capture: true });
-                    window.removeEventListener('popstate', handleBack);
-                    window.addEventListener('popstate', handleBack, { passive: true });
-                    const observer = new MutationObserver(() => { if (!skipFocusReset) { updateFocusableElements(); initializeFocus(); } });
-                    observer.observe(jellyfin.document.body, { childList: true, subtree: true });
-                    jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
-                        handleIframeLoad(iframe);
-                        iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
-                    });
-                    isInitialized = true; initializeFocus();
-                };
+					forceTVMode();
+					addStyles(jellyfin.document);
+
+					// Remove existing keydown listener and add a new one
+					jellyfin.document.removeEventListener('keydown', handleKeydown, true);
+					jellyfin.document.addEventListener('keydown', handleKeydown, { passive: false, capture: true });
+
+					// Remove existing popstate listener and add a new one
+					window.removeEventListener('popstate', handleBack);
+					window.addEventListener('popstate', handleBack, { passive: true });
+
+					// **Disconnect any existing MutationObserver before creating a new one**
+					if (mutationObserver) {
+						mutationObserver.disconnect();
+						mutationObserver = null; // Optional: Clear the reference
+					}
+
+					// Create a new MutationObserver and assign it to the mutationObserver variable
+					mutationObserver = new MutationObserver(() => {
+						if (!skipFocusReset) {
+							updateFocusableElements();
+							initializeFocus();
+						}
+					});
+
+					// Start observing mutations
+					mutationObserver.observe(jellyfin.document.body, { childList: true, subtree: true });
+
+					// Handle iframes
+					jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
+						handleIframeLoad(iframe);
+						iframe.removeEventListener('load', handleIframeLoad); // Optional: Remove existing listener if necessary
+						iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
+					});
+
+					isInitialized = true;
+					initializeFocus();
+				};
 
                 const checkNav = () => {
                     const newLoc = window.top.location.href + window.top.location.hash;
                     if (newLoc !== currentLocation) { currentLocation = newLoc; isInitialized = false; init(); }
                 };
 
-                const observer = new MutationObserver(() => { if (!skipFocusReset) { updateFocusableElements(); initializeFocus(); } });
-                setInterval(checkNav, 100);
+                const observer = new MutationObserver(() => { if (!skipFocusReset) { updateFocusableElements(); } });
+                setInterval(checkNav, 250);
                 window.addEventListener('hashchange', () => { isInitialized = false; init(); }, { passive: true });
                 init();
-            }, 150);
+            }, 250);
         }, { passive: true });
     </script>
 </head>
