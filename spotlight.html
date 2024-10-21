@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v3.0.1</title>
+    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v3.0.4</title>
     <style>
         :root { --highlight-color: #6a00b3; }
         .keyboard-nav-highlight {
@@ -16,8 +16,15 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
-                let isInitialized = false, currentLocation = '', previousElement = null, mutationObserver = null, skipFocusReset = false;
-                let focusableElements = [], currentRow = -1, currentCol = -1;
+                let isInitialized = false,
+                    currentLocation = '',
+                    previousElement = null,
+                    mutationObserver = null,
+                    skipFocusReset = false;
+                let isNavigating = false; // Navigation flag
+                let focusableElements = [],
+                    currentRow = -1,
+                    currentCol = -1;
                 const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
                 const selectors = `.itemsContainer .cardScalable, .emby-scrollbuttons-button, .mainDetailButtons .detailButton, .buttons .paper-icon-button-light, .playerControlsContainer button, .playerControlsContainer a, .emby-tabs-slider button, .headerRight button, .headerLeft button, .clickable-overlay, .video-player, .featurediframe, #leftButton, #rightButton`;
                 const jellyfin = (() => { try { return window.parent.document ? window.parent : window; } catch { return window; } })();
@@ -29,7 +36,6 @@
                         style.textContent = `
                             :root { --highlight-color: ${highlightColor}; }
                             .keyboard-nav-highlight {
-                                // outline: 3px solid var(--highlight-color) !important;
                                 box-shadow: ${isIframe ? 'none' : '0 10px 20px rgba(106,0,179,0.6)'} !important;
                                 ${isIframe ? 'transform: none;' : 'transform: scale(1.15);'}
                                 transition: transform 0.3s ease, outline 0.3s ease, box-shadow 0.3s ease;
@@ -69,7 +75,8 @@
                                 addStyles(iframeDoc, true);
                                 injectIframeHoverStyles(iframeDoc);
                                 Array.from(iframeDoc.querySelectorAll('[tabindex="0"]')).filter(isElementVisible).forEach(innerEl => {
-                                    const rect = el.getBoundingClientRect(), innerRect = innerEl.getBoundingClientRect();
+                                    const rect = el.getBoundingClientRect(),
+                                        innerRect = innerEl.getBoundingClientRect();
                                     processed.push({ element: innerEl, top: rect.top + innerRect.top, left: rect.left + innerRect.left });
                                 });
                             }
@@ -79,7 +86,10 @@
                         }
                     });
                     processed.sort((a, b) => a.top !== b.top ? a.top - b.top : a.left - b.left);
-                    let grid = [], row = [], lastTop = -1, threshold = 30;
+                    let grid = [],
+                        row = [],
+                        lastTop = -1,
+                        threshold = 30;
                     processed.forEach(item => {
                         if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
                             if (row.length) grid.push(row);
@@ -97,7 +107,9 @@
                         el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
                         const carousel = el.closest('.emby-scroller');
                         if (carousel) {
-                            const cr = carousel.getBoundingClientRect(), er = el.getBoundingClientRect(), buffer = 100;
+                            const cr = carousel.getBoundingClientRect(),
+                                er = el.getBoundingClientRect(),
+                                buffer = 100;
                             if (er.left < cr.left + buffer) carousel.scrollBy({ left: er.left - cr.left - buffer, behavior: 'smooth' });
                             if (er.right > cr.right - buffer) carousel.scrollBy({ left: er.right - cr.right + buffer, behavior: 'smooth' });
                         }
@@ -106,10 +118,13 @@
 
                 const moveFocus = (dr, dc) => {
                     if (!focusableElements.length) return;
-                    let nr = currentRow + dr, nc = currentCol + dc;
-                    nr = (nr + focusableElements.length) % focusableElements.length;
+                    let nr = currentRow + dr,
+                        nc = currentCol + dc;
+                    if (nr < 0) nr = focusableElements.length - 1;
+                    else if (nr >= focusableElements.length) nr = 0;
+                    if (nc < 0) nc = focusableElements[nr].length - 1;
+                    else if (nc >= focusableElements[nr].length) nc = 0;
                     if (focusableElements[nr]) {
-                        nc = (nc + focusableElements[nr].length) % focusableElements[nr].length;
                         const newEl = focusableElements[nr][nc];
                         if (previousElement) {
                             previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
@@ -125,7 +140,9 @@
                             const iframe = jellyfin.document.querySelector('iframe.featurediframe');
                             if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
                         }
-                        currentRow = nr; currentCol = nc; previousElement = newEl;
+                        currentRow = nr;
+                        currentCol = nc;
+                        previousElement = newEl;
                     }
                 };
 
@@ -137,8 +154,11 @@
                         first = Array.from(jellyfin.document.querySelectorAll('button.btnPause.autoSize.paper-icon-button-light[title="Pause (K)"]')).find(isElementVisible);
                     }
                     if (!first) {
-                        const priSel = ['button[is="emby-button"][data-action="resume"]','button[is="emby-button"][data-action="play"]','.itemsContainer .cardScalable'];
-                        for (const sel of priSel) { const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible); if (elems.length) { first = elems[0]; break; } }
+                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardScalable'];
+                        for (const sel of priSel) {
+                            const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
+                            if (elems.length) { first = elems[0]; break; }
+                        }
                     }
                     if (!first && focusableElements.length && focusableElements[0].length) first = focusableElements[0][0];
                     if (first) {
@@ -177,10 +197,19 @@
                             skipFocusReset = true;
                         }
                     } else {
+                        // Determine if the action is a navigation
+                        const isNavigationAction = active.matches('a[href], button[data-action="navigate"]') || active.querySelector('a[href*="/web/index.html#!/item"], button[data-action="navigate"]');
+                        if (isNavigationAction) {
+                            isNavigating = true; // Set navigation flag
+                        }
+                        // Perform the action
                         (active.querySelector('a[href*="/web/index.html#!/item"], button, a') || active).click();
+
+                        // No interference with text fields or other elements
+                        // Do not set previousElement to null or modify focus
                     }
 
-                    const isLR = ['leftButton','rightButton'].includes(active.id) || active.closest('#leftButton') || active.closest('#rightButton');
+                    const isLR = ['leftButton', 'rightButton'].includes(active.id) || active.closest('#leftButton') || active.closest('#rightButton');
                     if (isLR || skipFocusReset) {
                         if (isLR) {
                             skipFocusReset = true;
@@ -193,18 +222,21 @@
                             updateFocusableElements(); 
                         }, 1000);
                     } else {
-                        if (previousElement) {
+                        if (previousElement && !isNavigating) { // Only remove focus if not navigating
                             previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
                             if (previousElement.classList.contains('clickable-overlay')) {
                                 const iframe = jellyfin.document.querySelector('iframe.featurediframe');
                                 if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
                             }
                         }
-                        previousElement = null;
-                        setTimeout(() => { 
-                            updateFocusableElements(); 
-                            initializeFocus(); 
-                        }, 1000);
+                        // Do not set previousElement to null
+                        // Do not call initializeFocus() for non-navigation actions
+                        if (!isNavigating) { 
+                            setTimeout(() => { 
+                                updateFocusableElements(); 
+                                // Do not call initializeFocus()
+                            }, 1000);
+                        }
                     }
                 };
 
@@ -226,74 +258,85 @@
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
                     if (doc) { addStyles(doc, true); injectIframeHoverStyles(doc); }
                 };
-				
-				const forceTVMode = () => {
-					jellyfin.document.documentElement.classList.remove('layout-desktop');
-					jellyfin.document.documentElement.classList.add('layout-tv');
-					const style = jellyfin.document.createElement('style');
-					style.textContent = `
-						.layout-tv { font-size: 88% !important; }
-						@media (min-width: 43.75em) {
-							.layout-tv {
-								justify-content: center; /* Centers horizontally */
-							}
-							.layout-tv .headerTabs {
-								margin: -4.0em auto 0 auto !important;
-								width: fit-content !important;
-							}
-						}
-					`;
-					jellyfin.document.head.appendChild(style);
-				};
+
+                const forceTVMode = () => {
+                    jellyfin.document.documentElement.classList.remove('layout-desktop');
+                    jellyfin.document.documentElement.classList.add('layout-tv');
+                    const style = jellyfin.document.createElement('style');
+                    style.textContent = `
+                        .layout-tv { font-size: 88% !important; }
+                        @media (min-width: 43.75em) {
+                            .layout-tv {
+                                justify-content: center; /* Centers horizontally */
+                            }
+                            .layout-tv .headerTabs {
+                                margin: -4.0em auto 0 auto !important;
+                                width: fit-content !important;
+                            }
+                        }
+                    `;
+                    jellyfin.document.head.appendChild(style);
+                };
 
                 const init = () => {
-					forceTVMode();
-					addStyles(jellyfin.document);
+                    forceTVMode();
+                    addStyles(jellyfin.document);
 
-					// Remove existing keydown listener and add a new one
-					jellyfin.document.removeEventListener('keydown', handleKeydown, true);
-					jellyfin.document.addEventListener('keydown', handleKeydown, { passive: false, capture: true });
+                    // Remove existing keydown listener and add a new one
+                    jellyfin.document.removeEventListener('keydown', handleKeydown, true);
+                    jellyfin.document.addEventListener('keydown', handleKeydown, { passive: false, capture: true });
 
-					// Remove existing popstate listener and add a new one
-					window.removeEventListener('popstate', handleBack);
-					window.addEventListener('popstate', handleBack, { passive: true });
+                    // Remove existing popstate listener and add a new one
+                    window.removeEventListener('popstate', handleBack);
+                    window.addEventListener('popstate', handleBack, { passive: true });
 
-					// **Disconnect any existing MutationObserver before creating a new one**
-					if (mutationObserver) {
-						mutationObserver.disconnect();
-						mutationObserver = null; // Optional: Clear the reference
-					}
+                    // **Disconnect any existing MutationObserver before creating a new one**
+                    if (mutationObserver) {
+                        mutationObserver.disconnect();
+                        mutationObserver = null; // Optional: Clear the reference
+                    }
 
-					// Create a new MutationObserver and assign it to the mutationObserver variable
-					mutationObserver = new MutationObserver(() => {
-						if (!skipFocusReset) {
-							updateFocusableElements();
-							initializeFocus();
-						}
-					});
+                    // Create a new MutationObserver and assign it to the mutationObserver variable
+                    mutationObserver = new MutationObserver(() => {
+                        if (!skipFocusReset) {
+                            updateFocusableElements();
+                            if (isNavigating) {
+                                initializeFocus();
+                                isNavigating = false; // Reset navigation flag after initializing focus
+                            }
+                        }
+                    });
 
-					// Start observing mutations
-					mutationObserver.observe(jellyfin.document.body, { childList: true, subtree: true });
+                    // Start observing mutations
+                    mutationObserver.observe(jellyfin.document.body, { childList: true, subtree: true });
 
-					// Handle iframes
-					jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
-						handleIframeLoad(iframe);
-						iframe.removeEventListener('load', handleIframeLoad); // Optional: Remove existing listener if necessary
-						iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
-					});
+                    // Handle iframes
+                    jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
+                        handleIframeLoad(iframe);
+                        iframe.removeEventListener('load', handleIframeLoad); // Optional: Remove existing listener if necessary
+                        iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
+                    });
 
-					isInitialized = true;
-					initializeFocus();
-				};
+                    isInitialized = true;
+                    initializeFocus();
+                };
 
                 const checkNav = () => {
                     const newLoc = window.top.location.href + window.top.location.hash;
-                    if (newLoc !== currentLocation) { currentLocation = newLoc; isInitialized = false; init(); }
+                    if (newLoc !== currentLocation) { 
+                        currentLocation = newLoc; 
+                        isInitialized = false; 
+                        isNavigating = false; // Reset navigation flag on location change
+                        init(); 
+                    }
                 };
 
-                const observer = new MutationObserver(() => { if (!skipFocusReset) { updateFocusableElements(); } });
                 setInterval(checkNav, 250);
-                window.addEventListener('hashchange', () => { isInitialized = false; init(); }, { passive: true });
+                window.addEventListener('hashchange', () => { 
+                    isInitialized = false; 
+                    isNavigating = false; // Reset navigation flag on hash change
+                    init(); 
+                }, { passive: true });
                 init();
             }, 250);
         }, { passive: true });
