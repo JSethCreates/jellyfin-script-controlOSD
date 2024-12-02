@@ -3,7 +3,7 @@
 <head>
     <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v3.0.4</title>
     <style>
-        :root { --highlight-color: #6a00b3; }
+        :root { --highlight-color: #00a1b3; }
         .keyboard-nav-highlight {
             background-color: var(--highlight-color) !important;
             transform: scale(1.15);
@@ -26,25 +26,89 @@
                     currentRow = -1,
                     currentCol = -1;
                 const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
-                const selectors = `.itemsContainer .cardScalable, .emby-scrollbuttons-button, .mainDetailButtons .detailButton, .buttons .paper-icon-button-light, .playerControlsContainer button, .playerControlsContainer a, .emby-tabs-slider button, .headerRight button, .headerLeft button, .clickable-overlay, .video-player, .featurediframe, #leftButton, #rightButton`;
+                const selectors = `.itemsContainer .cardScalable, .emby-scrollbuttons-button, .mainDetailButtons .detailButton, .buttons .paper-icon-button-light, .playerControlsContainer button, .playerControlsContainer a, .emby-tabs-slider button, .headerRight button, .headerLeft button, .clickable-overlay, .video-player, .featurediframe, #leftButton, #rightButton, .button-link.itemAction.emby-button, .overview-expand.emby-button, button.raised.more.raised-mini.noIcon.emby-button, .listItem.listItem-largeImage.listItem-withContentWrapper`;
                 const jellyfin = (() => { try { return window.parent.document ? window.parent : window; } catch { return window; } })();
 
-                const addStyles = (doc, isIframe = false) => {
-                    if (!doc.getElementById('tv-nav-styles')) {
-                        const style = doc.createElement('style');
-                        style.id = 'tv-nav-styles';
-                        style.textContent = `
-                            :root { --highlight-color: ${highlightColor}; }
-                            .keyboard-nav-highlight {
-                                box-shadow: ${isIframe ? 'none' : '0 10px 20px rgba(106,0,179,0.6)'} !important;
-                                ${isIframe ? 'transform: none;' : 'transform: scale(1.15);'}
-                                transition: transform 0.3s ease, outline 0.3s ease, box-shadow 0.3s ease;
-                            }
-                            .highlight-chevron { background-color: var(--highlight-color) !important; }
-                        `;
-                        doc.head.appendChild(style);
-                    }
-                };
+				function hexToRgba(hex, alpha) {
+					// Remove the hash symbol if present
+					hex = hex.replace('#', '');
+
+					// Handle shorthand hex (e.g., "6a0") by expanding it
+					if (hex.length === 3) {
+						hex = hex.split('').map(char => char + char).join('');
+					}
+
+					// Parse the r, g, b values
+					const bigint = parseInt(hex, 16);
+					const r = (bigint >> 16) & 255;
+					const g = (bigint >> 8) & 255;
+					const b = bigint & 255;
+
+					return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+				}
+
+				const addStyles = (doc, isIframe = false) => {
+					if (!doc.getElementById('tv-nav-styles')) {
+						const style = doc.createElement('style');
+						style.id = 'tv-nav-styles';
+
+						// Convert the hex highlight color to rgba with 0.5 opacity for the glow
+						const boxShadowColor = hexToRgba(highlightColor, 0.5);
+
+						style.textContent = `
+							/* Define the highlight color using a CSS variable */
+							:root { 
+								--highlight-color: ${highlightColor}; 
+							}
+
+							/* Style for highlighted elements */
+							.keyboard-nav-highlight {
+								position: relative; /* Ensure proper positioning */
+								//background-color: var(--highlight-color) !important; /* Set background color */
+								//transform: ${isIframe ? 'none' : 'scale(1.2)'}; /* Scale up if not in iframe */
+								transition: transform 0.3s ease, background-color 0.3s ease; /* Smooth transitions */
+								
+								/* Use outline instead of border to prevent scaling issues */
+								outline: 2px solid var(--highlight-color); /* Solid outline */
+								
+								/* Apply box-shadow for the glow effect */
+								box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`}; /* Subtle glow */
+								
+								/* Optional: Apply pulsing animation to the glow */
+								animation: ${isIframe ? 'none' : 'pulse-glow 2s infinite'}; /* Pulsing glow */
+								
+								z-index: 1; /* Ensure it sits above other elements */
+							}
+
+							/* Define the pulsing glow animation */
+							@keyframes pulse-glow {
+								0% {
+									box-shadow: 0 0 10px ${boxShadowColor};
+								}
+								50% {
+									box-shadow: 0 0 20px ${boxShadowColor};
+								}
+								100% {
+									box-shadow: 0 0 10px ${boxShadowColor};
+								}
+							}
+
+							/* Style for chevron highlights 
+							.highlight-chevron { 
+								background-color: var(--highlight-color) !important; 
+							}*/
+
+							/* Specific styles for elements within iframes */
+							.featurediframe .keyboard-nav-highlight { 
+								transform: none !important; 
+								outline: 2px solid var(--highlight-color); /* Maintain outline in iframes */
+								box-shadow: none !important; /* Remove glow in iframes */
+								animation: none !important; /* Remove animation in iframes */
+							}
+						`;
+						doc.head.appendChild(style);
+					}
+				};
 
                 const injectIframeHoverStyles = doc => {
                     if (!doc.getElementById('iframe-hover-styles')) {
@@ -154,7 +218,7 @@
                         first = Array.from(jellyfin.document.querySelectorAll('button.btnPause.autoSize.paper-icon-button-light[title="Pause (K)"]')).find(isElementVisible);
                     }
                     if (!first) {
-                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardScalable'];
+                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', 'button[aria-label="Next Movie"]', '.itemsContainer .cardScalable'];
                         for (const sel of priSel) {
                             const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
                             if (elems.length) { first = elems[0]; break; }
@@ -261,13 +325,14 @@
 
                 const forceTVMode = () => {
                     jellyfin.document.documentElement.classList.remove('layout-desktop');
+					jellyfin.document.documentElement.classList.remove('layout-mobile');
                     jellyfin.document.documentElement.classList.add('layout-tv');
                     const style = jellyfin.document.createElement('style');
                     style.textContent = `
                         .layout-tv { font-size: 88% !important; }
-                        @media (min-width: 43.75em) {
+                         @media (min-width: 44em) {
                             .layout-tv {
-                                justify-content: center; /* Centers horizontally */
+                                justify-content: center;
                             }
                             .layout-tv .headerTabs {
                                 margin: -4.0em auto 0 auto !important;
