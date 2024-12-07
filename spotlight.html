@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v3.0.4</title>
+    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v4.0.1</title>
     <style>
         :root { --highlight-color: #E8DEF8; }
         .keyboard-nav-highlight {
@@ -10,6 +10,7 @@
             transition: transform 0.3s ease, outline 0.3s ease, box-shadow 0.3s ease;
             box-shadow: 0 10px 20px rgba(106,0,179,0.6) !important;
         }
+		
         .highlight-chevron { background-color: var(--highlight-color) !important; }
         .featurediframe .keyboard-nav-highlight { transform: none !important; box-shadow: none !important; }
     </style>
@@ -26,25 +27,24 @@
                     currentRow = -1,
                     currentCol = -1;
                 const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
-                const selectors = `.itemsContainer .cardScalable, 
-									.emby-scrollbuttons-button, 
-									.mainDetailButtons .detailButton, 
-									.buttons .paper-icon-button-light, 
-									.playerControlsContainer button, 
-									.playerControlsContainer a, 
-									.emby-tabs-slider button, 
-									.headerRight button, 
-									.headerLeft button, 
-									.clickable-overlay, 
-									.video-player, 
-									.featurediframe, 
-									#leftButton, 
-									#rightButton, 
-									.button-link.itemAction.emby-button, 
-									.overview-expand.emby-button, 
-									button.raised.more.raised-mini.noIcon.emby-button, 
-									.listItem.listItem-largeImage.listItem-withContentWrapper, 
-									button.btnPlay.detailButton.emby-button`;
+				const selectors = `
+				  .itemsContainer .cardScalable,
+				  .emby-scrollbuttons-button,
+				  .mainDetailButtons .detailButton,
+				  .buttons .paper-icon-button-light,
+				  .playerControlsContainer button,
+				  .playerControlsContainer a,
+				  .emby-tabs-slider button,
+				  .headerRight button,
+				  .headerLeft button,
+				  .featurediframe,
+				  #leftButton,
+				  #rightButton,
+				  .button-link.itemAction.emby-button,
+				  .overview-expand.emby-button,
+				  button.raised.more.raised-mini.noIcon.emby-button,
+				  .listItem.listItem-largeImage.listItem-withContentWrapper`;
+				  
                 const jellyfin = (() => { try { return window.parent.document ? window.parent : window; } catch { return window; } })();
 
 				function hexToRgba(hex, alpha) {
@@ -119,6 +119,20 @@
 							.listItem.keyboard-nav-highlight {
 								background-color: var(--md-hover-primary) !important;
 							}
+							
+							/* ── Segmented Slideshow Nav Pills ── */
+							#navButtons button.keyboard-nav-highlight {
+								background-color: var(--md-sys-color-primary) !important;
+								color: var(--md-sys-color-surface) !important;
+								box-shadow: 0 0 10px rgba(103, 80, 164, 0.4) !important;
+								transform: scale(1.1);
+								transition: background-color 0.2s ease, transform 0.2s ease;
+							}
+
+							/* Ensure the icon inside also updates */
+							#navButtons button.keyboard-nav-highlight .material-icons {
+								color: var(--md-sys-color-surface) !important;
+							}
 
 							.cardScalable.keyboard-nav-highlight {
 								transform: scale(1.1);
@@ -134,11 +148,6 @@
 							.cardOverlayFab-primary.keyboard-nav-highlight {
 								background: linear-gradient(rgba(0, 164, 220, 0.1), rgba(0, 164, 220, 0.1)) padding-box,
 											var(--border-color) border-box !important;
-							}
-
-							.layout-desktop .btnPlay.keyboard-nav-highlight {
-								background-color: #00a5dc28 !important;
-								transform: translateX(5px) !important;
 							}
 
 							.paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
@@ -158,6 +167,9 @@
 							.mainDetailButtons .detailButton.keyboard-nav-highlight {
 								background-color: var(--md-sys-color-surface-container) !important;
 								color: var(--md-sys-color-surface) !important;
+								box-shadow: none !important;
+								background-image: none !important;
+								backdrop-filter: none !important;
 							}
 
 							.mainDetailButtons > .btnMoreCommands.detailButton.keyboard-nav-highlight {
@@ -186,9 +198,13 @@
 								color: var(--md-sys-color-on-surface) !important;
 								box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.25) !important;
 							}
-							.detailButton.keyboard-nav-highlight {
-								outline: 2px dashed red !important;
+							
+							.btnPlay.detailButton.keyboard-nav-highlight {
+								transform: scale(1.2) !important;
+								box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
+								z-index: 3 !important;
 							}
+							
 						`;
 						doc.head.appendChild(style);
 					}
@@ -237,7 +253,7 @@
                     let grid = [],
                         row = [],
                         lastTop = -1,
-                        threshold = 60;
+                        threshold = 30;
                     processed.forEach(item => {
                         if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
                             if (row.length) grid.push(row);
@@ -268,7 +284,8 @@
                     if (!focusableElements.length) return;
                     let nr = currentRow + dr,
                         nc = currentCol + dc;
-					if (nr < 0 || nr >= focusableElements.length) return;
+                    if (nr < 0) nr = focusableElements.length - 1;
+                    else if (nr >= focusableElements.length) nr = 0;
                     if (nc < 0) nc = focusableElements[nr].length - 1;
                     else if (nc >= focusableElements[nr].length) nc = 0;
                     if (focusableElements[nr]) {
@@ -296,17 +313,18 @@
                 const initializeFocus = () => {
                     updateFocusableElements();
                     let first = null;
-                    const isVideo = window.top.location.href.includes('index.html#/video');
-                    if (isVideo) {
-                        first = Array.from(jellyfin.document.querySelectorAll('button.btnPause.autoSize.paper-icon-button-light[title="Pause (K)"]')).find(isElementVisible);
-                    }
-                    if (!first) {
-                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', 'button[aria-label="Next Movie"]', '.itemsContainer .cardScalable'];
-                        for (const sel of priSel) {
-                            const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
-                            if (elems.length) { first = elems[0]; break; }
-                        }
-                    }
+
+					// FORCE first focus to #rightButton if it exists and is visible
+					const rightButton = jellyfin.document.querySelector('#rightButton');
+					if (rightButton && isElementVisible(rightButton)) {
+						first = rightButton;
+					} else {
+						const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardScalable'];
+						for (const sel of priSel) {
+							const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
+							if (elems.length) { first = elems[0]; break; }
+						}
+					}
                     if (!first && focusableElements.length && focusableElements[0].length) first = focusableElements[0][0];
                     if (first) {
                         if (previousElement && previousElement !== first) {
@@ -467,6 +485,10 @@
 
                     isInitialized = true;
                     initializeFocus();
+					setTimeout(() => {
+						console.log('↪ Forcing fallback update of focusable elements (2s post-init)');
+						updateFocusableElements();
+					}, 2000);
                 };
 
                 const checkNav = () => {
