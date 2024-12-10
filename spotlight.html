@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Bacons UI - A Jellyfin UI Enhancement and Remote Handler v4.0.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v4.1.8</title>
     <style>
         :root { --highlight-color: #E8DEF8; }
         .keyboard-nav-highlight {
@@ -78,12 +78,21 @@
 								--highlight-color: ${highlightColor};
 								--md-hover-primary: rgba(103, 80, 164, 0.12);
 								--md-hover-on-surface: rgba(28, 27, 31, 0.08);
+								
+								
 								--md-sys-color-primary: #6750A4;
 								--md-sys-color-on-primary: #FFFFFF;
-								--md-sys-color-on-surface: #1C1B1F;
+								--md-sys-color-surface: #FFFBFE;
+								--md-sys-color-surface-container-low: #F7F2FA;
 								--md-sys-color-surface-container: #E8DEF8;
 								--md-sys-color-surface-container-high: #D0BCFF;
 								--md-sys-color-outline: #79747E;
+
+								--md-sys-color-secondary: #625B71;
+								--md-sys-color-on-surface: #1C1B1F;
+								--md-sys-color-surface-variant: #E7E0EC;
+								
+								
 								--border-color: linear-gradient(45deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 41%, rgba(255, 255, 255, 0.1) 57%, rgba(255, 255, 255, 0.3) 100%);
 							}
 
@@ -124,8 +133,6 @@
 							#navButtons button.keyboard-nav-highlight {
 								background-color: var(--md-sys-color-primary) !important;
 								color: var(--md-sys-color-surface) !important;
-								box-shadow: 0 0 10px rgba(103, 80, 164, 0.4) !important;
-								transform: scale(1.1);
 								transition: background-color 0.2s ease, transform 0.2s ease;
 							}
 
@@ -253,7 +260,7 @@
                     let grid = [],
                         row = [],
                         lastTop = -1,
-                        threshold = 30;
+                        threshold = 70;
                     processed.forEach(item => {
                         if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
                             if (row.length) grid.push(row);
@@ -284,8 +291,8 @@
                     if (!focusableElements.length) return;
                     let nr = currentRow + dr,
                         nc = currentCol + dc;
-                    if (nr < 0) nr = focusableElements.length - 1;
-                    else if (nr >= focusableElements.length) nr = 0;
+                    if (nr < 0) return;
+					if (nr >= focusableElements.length) return;
                     if (nc < 0) nc = focusableElements[nr].length - 1;
                     else if (nc >= focusableElements[nr].length) nc = 0;
                     if (focusableElements[nr]) {
@@ -508,7 +515,7 @@
                     init(); 
                 }, { passive: true });
                 init();
-            }, 250);
+            }, 800);
         }, { passive: true });
     </script>
 </head>
