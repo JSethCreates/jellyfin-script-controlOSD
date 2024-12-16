@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v4.1.8</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v4.1.9</title>
     <style>
         :root { --highlight-color: #E8DEF8; }
         .keyboard-nav-highlight {
@@ -10,7 +10,6 @@
             transition: transform 0.3s ease, outline 0.3s ease, box-shadow 0.3s ease;
             box-shadow: 0 10px 20px rgba(106,0,179,0.6) !important;
         }
-		
         .highlight-chevron { background-color: var(--highlight-color) !important; }
         .featurediframe .keyboard-nav-highlight { transform: none !important; box-shadow: none !important; }
     </style>
@@ -26,196 +25,156 @@
                 let focusableElements = [],
                     currentRow = -1,
                     currentCol = -1;
+
                 const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
-				const selectors = `
-				  .itemsContainer .cardScalable,
-				  .emby-scrollbuttons-button,
-				  .mainDetailButtons .detailButton,
-				  .buttons .paper-icon-button-light,
-				  .playerControlsContainer button,
-				  .playerControlsContainer a,
-				  .emby-tabs-slider button,
-				  .headerRight button,
-				  .headerLeft button,
-				  .featurediframe,
-				  #leftButton,
-				  #rightButton,
-				  .button-link.itemAction.emby-button,
-				  .overview-expand.emby-button,
-				  button.raised.more.raised-mini.noIcon.emby-button,
-				  .listItem.listItem-largeImage.listItem-withContentWrapper`;
-				  
+                const selectors = `
+                  .itemsContainer .cardScalable,
+                  .emby-scrollbuttons-button,
+                  .mainDetailButtons .detailButton,
+                  .buttons .paper-icon-button-light,
+                  .playerControlsContainer button,
+                  .playerControlsContainer a,
+                  .emby-tabs-slider button,
+                  .headerRight button,
+                  .headerLeft button,
+                  .featurediframe,
+                  #leftButton,
+                  #rightButton,
+                  .button-link.itemAction.emby-button,
+                  .overview-expand.emby-button,
+                  button.raised.more.raised-mini.noIcon.emby-button,
+                  .listItem.listItem-largeImage.listItem-withContentWrapper`;
+
                 const jellyfin = (() => { try { return window.parent.document ? window.parent : window; } catch { return window; } })();
 
-				function hexToRgba(hex, alpha) {
-					// Remove the hash symbol if present
-					hex = hex.replace('#', '');
+                function hexToRgba(hex, alpha) {
+                    hex = hex.replace('#', '');
+                    if (hex.length === 3) hex = hex.split('').map(ch => ch + ch).join('');
+                    const bigint = parseInt(hex, 16);
+                    const r = (bigint >> 16) & 255;
+                    const g = (bigint >> 8) & 255;
+                    const b = bigint & 255;
+                    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                }
 
-					// Handle shorthand hex (e.g., "6a0") by expanding it
-					if (hex.length === 3) {
-						hex = hex.split('').map(char => char + char).join('');
-					}
-
-					// Parse the r, g, b values
-					const bigint = parseInt(hex, 16);
-					const r = (bigint >> 16) & 255;
-					const g = (bigint >> 8) & 255;
-					const b = bigint & 255;
-
-					return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-				}
-
-				const addStyles = (doc, isIframe = false) => {
-					if (!doc.getElementById('tv-nav-styles')) {
-						const style = doc.createElement('style');
-						style.id = 'tv-nav-styles';
-
-						// Convert the hex highlight color to rgba with 0.5 opacity for the glow
-						const boxShadowColor = hexToRgba(highlightColor, 0.5);
-
-						style.textContent = `
-							:root {
-								--highlight-color: ${highlightColor};
-								--md-hover-primary: rgba(103, 80, 164, 0.12);
-								--md-hover-on-surface: rgba(28, 27, 31, 0.08);
-								
-								
-								--md-sys-color-primary: #6750A4;
-								--md-sys-color-on-primary: #FFFFFF;
-								--md-sys-color-surface: #FFFBFE;
-								--md-sys-color-surface-container-low: #F7F2FA;
-								--md-sys-color-surface-container: #E8DEF8;
-								--md-sys-color-surface-container-high: #D0BCFF;
-								--md-sys-color-outline: #79747E;
-
-								--md-sys-color-secondary: #625B71;
-								--md-sys-color-on-surface: #1C1B1F;
-								--md-sys-color-surface-variant: #E7E0EC;
-								
-								
-								--border-color: #79747E;
-							}
-
-							.headerSyncButton,
-							.headerCastButton,
-							.headerUserButton,
-							.headerBackButton {
-								display: none !important;
-							}
-
-							.keyboard-nav-highlight {
-								position: relative;
-								transition: transform 0.3s ease, background-color 0.3s ease;
-								// outline: 2px solid var(--highlight-color);
-								box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`};
-								animation: ${isIframe ? 'none' : 'pulse-glow 2s infinite'};
-								z-index: 1;
-							}
-
-							@keyframes pulse-glow {
-								0%   { box-shadow: 0 0 10px ${boxShadowColor}; }
-								50%  { box-shadow: 0 0 20px ${boxShadowColor}; }
-								100% { box-shadow: 0 0 10px ${boxShadowColor}; }
-							}
-
-							.featurediframe .keyboard-nav-highlight {
-								transform: none !important;
-								outline: 2px solid var(--highlight-color);
-								box-shadow: none !important;
-								animation: none !important;
-							}
-
-							.listItem.keyboard-nav-highlight {
-								background-color: var(--md-hover-primary) !important;
-							}
-							
-							/* ── Segmented Slideshow Nav Pills ── */
-							#navButtons button.keyboard-nav-highlight {
-								background-color: var(--md-sys-color-primary) !important;
-								color: var(--md-sys-color-surface) !important;
-								transition: background-color 0.2s ease, transform 0.2s ease;
-							}
-
-							/* Ensure the icon inside also updates */
-							#navButtons button.keyboard-nav-highlight .material-icons {
-								color: var(--md-sys-color-surface) !important;
-							}
-
-							.cardScalable.keyboard-nav-highlight {
-								transform: scale(1.1);
-								box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
-							}
-
-
-							.actionSheetMenuItem.keyboard-nav-highlight,
-							.navMenuOption.keyboard-nav-highlight {
-								background-color: var(--md-hover-primary) !important;
-							}
-
-							.cardOverlayFab-primary.keyboard-nav-highlight {
-								background: linear-gradient(rgba(0, 164, 220, 0.1), rgba(0, 164, 220, 0.1)) padding-box,
-											var(--border-color) border-box !important;
-							}
-
-							.paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
-								background-color: #00a5dc11 !important;
-								color: #00a5dcec !important;
-							}
-
-							.formDialogHeader .btnCancel.keyboard-nav-highlight {
-								background-color: var(--md-hover-primary) !important;
-							}
-
-							.formDialogFooterItem.button-submit.keyboard-nav-highlight {
-								background-color: #5f429a !important;
-								box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.3) !important;
-							}
-
-							.mainDetailButtons .detailButton.keyboard-nav-highlight {
-								background-color: var(--md-sys-color-surface-container) !important;
-								color: var(--md-sys-color-surface) !important;
-								box-shadow: none !important;
-								background-image: none !important;
-								backdrop-filter: none !important;
-							}
-
-							.mainDetailButtons > .btnMoreCommands.detailButton.keyboard-nav-highlight {
-								border-top-right-radius: 999px !important;
-								border-bottom-right-radius: 999px !important;
-							}
-
-							.mainDetailButtons > .btnReplay.detailButton.keyboard-nav-highlight {
-								border-top-left-radius: 999px !important;
-								border-bottom-left-radius: 999px !important;
-							}
-
-							a.button-link.itemAction.emby-button.keyboard-nav-highlight {
-								background-color: var(--md-sys-color-surface-container) !important;
-								color: var(--md-sys-color-on-surface) !important;
-								border-color: var(--md-sys-color-outline) !important;
-							}
-
-							a.overview-expand.emby-button.keyboard-nav-highlight {
-								background-color: var(--md-sys-color-surface-container) !important;
-								color: var(--md-sys-color-on-surface) !important;
-							}
-
-							button.raised.more.raised-mini.noIcon.emby-button.keyboard-nav-highlight {
-								background-color: var(--md-sys-color-surface-container) !important;
-								color: var(--md-sys-color-on-surface) !important;
-								box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.25) !important;
-							}
-							
-							.btnPlay.detailButton.keyboard-nav-highlight {
-								transform: scale(1.2) !important;
-								box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
-								z-index: 3 !important;
-							}
-							
-						`;
-						doc.head.appendChild(style);
-					}
-				};
+                const addStyles = (doc, isIframe = false) => {
+                    if (!doc.getElementById('tv-nav-styles')) {
+                        const style = doc.createElement('style');
+                        style.id = 'tv-nav-styles';
+                        const boxShadowColor = hexToRgba(highlightColor, 0.5);
+                        style.textContent = `
+                            :root {
+                                --highlight-color: ${highlightColor};
+                                --md-hover-primary: rgba(103, 80, 164, 0.12);
+                                --md-hover-on-surface: rgba(28, 27, 31, 0.08);
+                                --md-sys-color-primary: #6750A4;
+                                --md-sys-color-on-primary: #FFFFFF;
+                                --md-sys-color-surface: #FFFBFE;
+                                --md-sys-color-surface-container-low: #F7F2FA;
+                                --md-sys-color-surface-container: #E8DEF8;
+                                --md-sys-color-surface-container-high: #D0BCFF;
+                                --md-sys-color-outline: #79747E;
+                                --md-sys-color-secondary: #625B71;
+                                --md-sys-color-on-surface: #1C1B1F;
+                                --md-sys-color-surface-variant: #E7E0EC;
+                                --border-color: #79747E;
+                            }
+                            .headerSyncButton,
+                            .headerCastButton,
+                            .headerUserButton,
+                            .headerBackButton {
+                                display: none !important;
+                            }
+                            .keyboard-nav-highlight {
+                                position: relative;
+                                transition: transform 0.3s ease, background-color 0.3s ease;
+                                box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`};
+                                animation: ${isIframe ? 'none' : 'pulse-glow 2s infinite'};
+                                z-index: 1;
+                            }
+                            @keyframes pulse-glow {
+                                0%   { box-shadow: 0 0 10px ${boxShadowColor}; }
+                                50%  { box-shadow: 0 0 20px ${boxShadowColor}; }
+                                100% { box-shadow: 0 0 10px ${boxShadowColor}; }
+                            }
+                            .featurediframe .keyboard-nav-highlight {
+                                transform: none !important;
+                                outline: 2px solid var(--highlight-color);
+                                box-shadow: none !important;
+                                animation: none !important;
+                            }
+                            .listItem.keyboard-nav-highlight {
+                                background-color: var(--md-hover-primary) !important;
+                            }
+                            #navButtons button.keyboard-nav-highlight {
+                                background-color: var(--md-sys-color-primary) !important;
+                                color: var(--md-sys-color-surface) !important;
+                                transition: background-color 0.2s ease, transform 0.2s ease;
+                            }
+                            #navButtons button.keyboard-nav-highlight .material-icons {
+                                color: var(--md-sys-color-surface) !important;
+                            }
+                            .cardScalable.keyboard-nav-highlight {
+                                transform: scale(1.1);
+                                box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
+                            }
+                            .actionSheetMenuItem.keyboard-nav-highlight,
+                            .navMenuOption.keyboard-nav-highlight {
+                                background-color: var(--md-hover-primary) !important;
+                            }
+                            .cardOverlayFab-primary.keyboard-nav-highlight {
+                                background: linear-gradient(rgba(0, 164, 220, 0.1), rgba(0, 164, 220, 0.1)) padding-box,
+                                            var(--border-color) border-box !important;
+                            }
+                            .paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
+                                background-color: #00a5dc11 !important;
+                                color: #00a5dcec !important;
+                            }
+                            .formDialogHeader .btnCancel.keyboard-nav-highlight {
+                                background-color: var(--md-hover-primary) !important;
+                            }
+                            .formDialogFooterItem.button-submit.keyboard-nav-highlight {
+                                background-color: #5f429a !important;
+                                box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.3) !important;
+                            }
+                            .mainDetailButtons .detailButton.keyboard-nav-highlight {
+                                background-color: var(--md-sys-color-surface-container) !important;
+                                color: var(--md-sys-color-surface) !important;
+                                box-shadow: none !important;
+                                background-image: none !important;
+                                backdrop-filter: none !important;
+                            }
+                            .mainDetailButtons > .btnMoreCommands.detailButton.keyboard-nav-highlight {
+                                border-top-right-radius: 999px !important;
+                                border-bottom-right-radius: 999px !important;
+                            }
+                            .mainDetailButtons > .btnReplay.detailButton.keyboard-nav-highlight {
+                                border-top-left-radius: 999px !important;
+                                border-bottom-left-radius: 999px !important;
+                            }
+                            a.button-link.itemAction.emby-button.keyboard-nav-highlight {
+                                background-color: var(--md-sys-color-surface-container) !important;
+                                color: var(--md-sys-color-on-surface) !important;
+                                border-color: var(--md-sys-color-outline) !important;
+                            }
+                            a.overview-expand.emby-button.keyboard-nav-highlight {
+                                background-color: var(--md-sys-color-surface-container) !important;
+                                color: var(--md-sys-color-on-surface) !important;
+                            }
+                            button.raised.more.raised-mini.noIcon.emby-button.keyboard-nav-highlight {
+                                background-color: var(--md-sys-color-surface-container) !important;
+                                color: var(--md-sys-color-on-surface) !important;
+                                box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.25) !important;
+                            }
+                            .btnPlay.detailButton.keyboard-nav-highlight {
+                                transform: scale(1.2) !important;
+                                box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
+                                z-index: 3 !important;
+                            }
+                        `;
+                        doc.head.appendChild(style);
+                    }
+                };
 
                 const injectIframeHoverStyles = doc => {
                     if (!doc.getElementById('iframe-hover-styles')) {
@@ -257,10 +216,7 @@
                         }
                     });
                     processed.sort((a, b) => a.top !== b.top ? a.top - b.top : a.left - b.left);
-                    let grid = [],
-                        row = [],
-                        lastTop = -1,
-                        threshold = 70;
+                    let grid = [], row = [], lastTop = -1, threshold = 70;
                     processed.forEach(item => {
                         if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
                             if (row.length) grid.push(row);
@@ -278,9 +234,7 @@
                         el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
                         const carousel = el.closest('.emby-scroller');
                         if (carousel) {
-                            const cr = carousel.getBoundingClientRect(),
-                                er = el.getBoundingClientRect(),
-                                buffer = 100;
+                            const cr = carousel.getBoundingClientRect(), er = el.getBoundingClientRect(), buffer = 100;
                             if (er.left < cr.left + buffer) carousel.scrollBy({ left: er.left - cr.left - buffer, behavior: 'smooth' });
                             if (er.right > cr.right - buffer) carousel.scrollBy({ left: er.right - cr.right + buffer, behavior: 'smooth' });
                         }
@@ -289,10 +243,8 @@
 
                 const moveFocus = (dr, dc) => {
                     if (!focusableElements.length) return;
-                    let nr = currentRow + dr,
-                        nc = currentCol + dc;
-                    if (nr < 0) return;
-					if (nr >= focusableElements.length) return;
+                    let nr = currentRow + dr, nc = currentCol + dc;
+                    if (nr < 0 || nr >= focusableElements.length) return;
                     if (nc < 0) nc = focusableElements[nr].length - 1;
                     else if (nc >= focusableElements[nr].length) nc = 0;
                     if (focusableElements[nr]) {
@@ -311,27 +263,22 @@
                             const iframe = jellyfin.document.querySelector('iframe.featurediframe');
                             if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
                         }
-                        currentRow = nr;
-                        currentCol = nc;
-                        previousElement = newEl;
+                        currentRow = nr; currentCol = nc; previousElement = newEl;
                     }
                 };
 
                 const initializeFocus = () => {
                     updateFocusableElements();
                     let first = null;
-
-					// FORCE first focus to #rightButton if it exists and is visible
-					const rightButton = jellyfin.document.querySelector('#rightButton');
-					if (rightButton && isElementVisible(rightButton)) {
-						first = rightButton;
-					} else {
-						const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardScalable'];
-						for (const sel of priSel) {
-							const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
-							if (elems.length) { first = elems[0]; break; }
-						}
-					}
+                    const rightButton = jellyfin.document.querySelector('#rightButton');
+                    if (rightButton && isElementVisible(rightButton)) first = rightButton;
+                    else {
+                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardScalable'];
+                        for (const sel of priSel) {
+                            const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
+                            if (elems.length) { first = elems[0]; break; }
+                        }
+                    }
                     if (!first && focusableElements.length && focusableElements[0].length) first = focusableElements[0][0];
                     if (first) {
                         if (previousElement && previousElement !== first) {
@@ -357,95 +304,65 @@
                 };
 
                 const handleEnter = () => {
-                    if (currentRow === -1 || currentCol === -1) { 
-                        initializeFocus(); 
-                        return; 
+                    if (currentRow === -1 || currentCol === -1) {
+                        initializeFocus();
+                        return;
                     }
                     const active = focusableElements[currentRow][currentCol];
                     if (active.classList.contains('video-player') || active.querySelector('.video-player')) {
-                        const spotlightIframe = jellyfin.document.querySelector('.featurediframe');
-                        if (spotlightIframe?.contentWindow?.controlYouTubePlayer) {
-                            spotlightIframe.contentWindow.controlYouTubePlayer.toggle();
+                        const spotIframe = jellyfin.document.querySelector('.featurediframe');
+                        if (spotIframe?.contentWindow?.controlYouTubePlayer) {
+                            spotIframe.contentWindow.controlYouTubePlayer.toggle();
                             skipFocusReset = true;
                         }
                     } else {
-                        // Determine if the action is a navigation
-                        const isNavigationAction = active.matches('a[href], button[data-action="navigate"]') || active.querySelector('a[href*="/web/index.html#!/item"], button[data-action="navigate"]');
-                        if (isNavigationAction) {
-                            isNavigating = true; // Set navigation flag
-                        }
-                        // Perform the action
+                        const isNavAction = active.matches('a[href], button[data-action="navigate"]') || active.querySelector('a[href*="/web/index.html#!/item"], button[data-action="navigate"]');
+                        if (isNavAction) isNavigating = true;
                         (active.querySelector('a[href*="/web/index.html#!/item"], button, a') || active).click();
-
-                        // No interference with text fields or other elements
-                        // Do not set previousElement to null or modify focus
                     }
-
-                    const isLR = ['leftButton', 'rightButton'].includes(active.id) || active.closest('#leftButton') || active.closest('#rightButton');
-                    if (isLR || skipFocusReset) {
-                        if (isLR) {
-                            skipFocusReset = true;
-                        }
-                        if (previousElement) { 
-                            previousElement.classList.add('keyboard-nav-highlight', 'highlight-chevron'); 
-                        }
-                        setTimeout(() => { 
-                            skipFocusReset = false; 
-                            updateFocusableElements(); 
-                        }, 1000);
-                    } else {
-                        if (previousElement && !isNavigating) { // Only remove focus if not navigating
-                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
+                    const isLR = ['leftButton','rightButton'].includes(active.id) || active.closest('#leftButton') || active.closest('#rightButton');
+                    if (isLR) skipFocusReset = true;
+                    if (!isLR && !skipFocusReset) {
+                        if (previousElement) {
+                            previousElement.classList.remove('keyboard-nav-highlight','highlight-chevron','video-focused');
                             if (previousElement.classList.contains('clickable-overlay')) {
-                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                                if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+                                const iframe = jellyfin.document.querySelector('iframe.featurediframe'); if (iframe) toggleHover(iframe.contentDocument||iframe.contentWindow.document,false);
                             }
                         }
-                        // Do not set previousElement to null
-                        // Do not call initializeFocus() for non-navigation actions
-                        if (!isNavigating) { 
-                            setTimeout(() => { 
-                                updateFocusableElements(); 
-                                // Do not call initializeFocus()
-                            }, 1000);
-                        }
+                        setTimeout(() => { updateFocusableElements(); },1000);
+                    } else {
+                        setTimeout(() => { skipFocusReset=false; updateFocusableElements(); if (isNavigating){ initializeFocus(); isNavigating=false;} },1000);
                     }
                 };
 
                 const handleKeydown = e => {
                     const activeEl = jellyfin.document.activeElement, tag = activeEl.tagName.toLowerCase();
                     if (['input','textarea'].includes(tag) || activeEl.isContentEditable) return;
-                    switch(e.key){
-                        case 'ArrowUp': moveFocus(-1,0); e.preventDefault(); break;
-                        case 'ArrowDown': moveFocus(1,0); e.preventDefault(); break;
-                        case 'ArrowLeft': moveFocus(0,-1); e.preventDefault(); break;
-                        case 'ArrowRight': moveFocus(0,1); e.preventDefault(); break;
+                    if (!previousElement) {
+                        initializeFocus();
+                        e.preventDefault();
+                        return;
+                    }
+                    switch(e.key) {
+                        case 'ArrowUp': updateFocusableElements(); moveFocus(-1,0); e.preventDefault(); break;
+                        case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
+                        case 'ArrowLeft': updateFocusableElements(); moveFocus(0,-1); e.preventDefault(); break;
+                        case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
                         case 'Enter': handleEnter(); e.preventDefault(); e.stopPropagation(); break;
                     }
                 };
 
                 const handleBack = () => setTimeout(() => { if (!skipFocusReset) { isInitialized = false; init(); } }, 250);
-
-                const handleIframeLoad = iframe => {
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (doc) { addStyles(doc, true); injectIframeHoverStyles(doc); }
-                };
-
+                const handleIframeLoad = iframe => { const doc = iframe.contentDocument||iframe.contentWindow.document; if (doc) { addStyles(doc,true); injectIframeHoverStyles(doc); }};
                 const forceTVMode = () => {
-                    jellyfin.document.documentElement.classList.remove('layout-desktop');
-					jellyfin.document.documentElement.classList.remove('layout-mobile');
+                    jellyfin.document.documentElement.classList.remove('layout-desktop','layout-mobile');
                     jellyfin.document.documentElement.classList.add('layout-tv');
                     const style = jellyfin.document.createElement('style');
                     style.textContent = `
                         .layout-tv { font-size: 88% !important; }
-                         @media (min-width: 44em) {
-                            .layout-tv {
-                                justify-content: center;
-                            }
-                            .layout-tv .headerTabs {
-                                margin: -4.0em auto 0 auto !important;
-                                width: fit-content !important;
-                            }
+                        @media (min-width: 44em) {
+                            .layout-tv { justify-content: center; }
+                            .layout-tv .headerTabs { margin: -4.0em auto 0 auto !important; width: fit-content !important; }
                         }
                     `;
                     jellyfin.document.head.appendChild(style);
@@ -454,66 +371,38 @@
                 const init = () => {
                     forceTVMode();
                     addStyles(jellyfin.document);
-
-                    // Remove existing keydown listener and add a new one
                     jellyfin.document.removeEventListener('keydown', handleKeydown, true);
-                    jellyfin.document.addEventListener('keydown', handleKeydown, { passive: false, capture: true });
-
-                    // Remove existing popstate listener and add a new one
+                    jellyfin.document.addEventListener('keydown', handleKeydown, { passive:false, capture:true });
                     window.removeEventListener('popstate', handleBack);
-                    window.addEventListener('popstate', handleBack, { passive: true });
-
-                    // **Disconnect any existing MutationObserver before creating a new one**
-                    if (mutationObserver) {
-                        mutationObserver.disconnect();
-                        mutationObserver = null; // Optional: Clear the reference
-                    }
-
-                    // Create a new MutationObserver and assign it to the mutationObserver variable
+                    window.addEventListener('popstate', handleBack, { passive:true });
+                    if (mutationObserver) { mutationObserver.disconnect(); mutationObserver = null; }
                     mutationObserver = new MutationObserver(() => {
                         if (!skipFocusReset) {
                             updateFocusableElements();
-                            if (isNavigating) {
-                                initializeFocus();
-                                isNavigating = false; // Reset navigation flag after initializing focus
-                            }
+                            if (isNavigating) { initializeFocus(); isNavigating=false; }
                         }
                     });
-
-                    // Start observing mutations
-                    mutationObserver.observe(jellyfin.document.body, { childList: true, subtree: true });
-
-                    // Handle iframes
+                    mutationObserver.observe(jellyfin.document.body, { childList:true, subtree:true });
                     jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
                         handleIframeLoad(iframe);
-                        iframe.removeEventListener('load', handleIframeLoad); // Optional: Remove existing listener if necessary
-                        iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
+                        iframe.removeEventListener('load', handleIframeLoad);
+                        iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive:true });
                     });
-
                     isInitialized = true;
-                    initializeFocus();
-					setTimeout(() => {
-						console.log('↪ Forcing fallback update of focusable elements (2s post-init)');
-						updateFocusableElements();
-					}, 2000);
+                    // Initial focus deferred until remote input
+                    setTimeout(() => {
+                        console.log('↪ Forcing fallback update of focusable elements (2s post-init)');
+                        updateFocusableElements();
+                    }, 2000);
                 };
 
                 const checkNav = () => {
                     const newLoc = window.top.location.href + window.top.location.hash;
-                    if (newLoc !== currentLocation) { 
-                        currentLocation = newLoc; 
-                        isInitialized = false; 
-                        isNavigating = false; // Reset navigation flag on location change
-                        init(); 
-                    }
+                    if (newLoc !== currentLocation) { currentLocation=newLoc; isInitialized=false; isNavigating=false; init(); }
                 };
 
                 setInterval(checkNav, 250);
-                window.addEventListener('hashchange', () => { 
-                    isInitialized = false; 
-                    isNavigating = false; // Reset navigation flag on hash change
-                    init(); 
-                }, { passive: true });
+                window.addEventListener('hashchange', () => { isInitialized=false; isNavigating=false; init(); }, { passive:true });
                 init();
             }, 800);
         }, { passive: true });
