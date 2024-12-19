@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v4.1.9</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v4.2.2</title>
     <style>
-        :root { --highlight-color: #E8DEF8; }
+        :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
             background-color: var(--highlight-color) !important;
             transform: scale(1.15);
@@ -22,13 +22,15 @@
                     mutationObserver = null,
                     skipFocusReset = false;
                 let isNavigating = false; // Navigation flag
+                let nowPlayingMode = false; // Track now-playing page
                 let focusableElements = [],
                     currentRow = -1,
                     currentCol = -1;
 
                 const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
                 const selectors = `
-                  .itemsContainer .cardScalable,
+                  .btnPlay,
+				  .itemsContainer .cardBox,
                   .emby-scrollbuttons-button,
                   .mainDetailButtons .detailButton,
                   .buttons .paper-icon-button-light,
@@ -46,6 +48,43 @@
                   .listItem.listItem-largeImage.listItem-withContentWrapper`;
 
                 const jellyfin = (() => { try { return window.parent.document ? window.parent : window; } catch { return window; } })();
+
+                // Detect Now Playing page and show indicator
+                function checkNowPlayingMode() {
+                    const url = window.top.location.href;
+                    const head = jellyfin.document.head;
+                    // Remove existing style
+                    const existingStyle = jellyfin.document.getElementById('now-playing-style');
+                    if (existingStyle) {
+                        existingStyle.remove();
+                    }
+                    if (url.includes('#/video')) {
+                        // Inject overlay style
+                        const style = jellyfin.document.createElement('style');
+                        style.id = 'now-playing-style';
+                        style.textContent = `
+                            #nowPlayingPage .remoteControlContent.padded-left.padded-right.padded-bottom.hideVideoButtons::before {
+                                content: 'NOW PLAYING PAGE MODE';
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                width: 100%;
+                                height: 100%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: red !important;
+                                font-size: 3rem !important;
+                                pointer-events: none;
+                                z-index: 9999 !important;
+                            }
+                        `;
+                        head.appendChild(style);
+                        nowPlayingMode = true;
+                    } else {
+                        nowPlayingMode = false;
+                    }
+                }
 
                 function hexToRgba(hex, alpha) {
                     hex = hex.replace('#', '');
@@ -88,7 +127,7 @@
                             .keyboard-nav-highlight {
                                 position: relative;
                                 transition: transform 0.3s ease, background-color 0.3s ease;
-                                box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`};
+                                box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`} ;
                                 animation: ${isIframe ? 'none' : 'pulse-glow 2s infinite'};
                                 z-index: 1;
                             }
@@ -112,11 +151,14 @@
                                 transition: background-color 0.2s ease, transform 0.2s ease;
                             }
                             #navButtons button.keyboard-nav-highlight .material-icons {
-                                color: var(--md-sys-color-surface) !important;
+                                color: var(--md-sys-color-primary) !important;
                             }
-                            .cardScalable.keyboard-nav-highlight {
-                                transform: scale(1.1);
-                                box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
+                            .cardBox.keyboard-nav-highlight {
+                                
+								box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
+								background-color: var(--md-sys-color-primary);
+								transform: scale(1.05); /* Slight growth */
+																
                             }
                             .actionSheetMenuItem.keyboard-nav-highlight,
                             .navMenuOption.keyboard-nav-highlight {
@@ -127,8 +169,8 @@
                                             var(--border-color) border-box !important;
                             }
                             .paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
-                                background-color: #00a5dc11 !important;
-                                color: #00a5dcec !important;
+                                background-color: var(--md-sys-color-surface) !important;
+                                color: var(--md-sys-color-primary) !important;
                             }
                             .formDialogHeader .btnCancel.keyboard-nav-highlight {
                                 background-color: var(--md-hover-primary) !important;
@@ -139,7 +181,7 @@
                             }
                             .mainDetailButtons .detailButton.keyboard-nav-highlight {
                                 background-color: var(--md-sys-color-surface-container) !important;
-                                color: var(--md-sys-color-surface) !important;
+                                color: var(--md-sys-color-primary) !important;
                                 box-shadow: none !important;
                                 background-image: none !important;
                                 backdrop-filter: none !important;
@@ -168,6 +210,8 @@
                             }
                             .btnPlay.detailButton.keyboard-nav-highlight {
                                 transform: scale(1.2) !important;
+								color: var(--md-sys-color-surface) !important;
+								background-color: var(--md-sys-color-primary) !important;
                                 box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
                                 z-index: 3 !important;
                             }
@@ -196,6 +240,7 @@
                 const isElementVisible = el => el.offsetParent && ['input','textarea'].indexOf(el.tagName.toLowerCase()) === -1 && el.offsetWidth > 0 && el.offsetHeight > 0;
 
                 const updateFocusableElements = () => {
+                    checkNowPlayingMode();
                     const elements = Array.from(jellyfin.document.querySelectorAll(selectors));
                     let processed = [];
                     elements.forEach(el => {
@@ -268,12 +313,13 @@
                 };
 
                 const initializeFocus = () => {
+                    checkNowPlayingMode();
                     updateFocusableElements();
                     let first = null;
                     const rightButton = jellyfin.document.querySelector('#rightButton');
                     if (rightButton && isElementVisible(rightButton)) first = rightButton;
                     else {
-                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardScalable'];
+                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardBox'];
                         for (const sel of priSel) {
                             const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
                             if (elems.length) { first = elems[0]; break; }
@@ -329,9 +375,9 @@
                                 const iframe = jellyfin.document.querySelector('iframe.featurediframe'); if (iframe) toggleHover(iframe.contentDocument||iframe.contentWindow.document,false);
                             }
                         }
-                        setTimeout(() => { updateFocusableElements(); },1000);
+                        setTimeout(()=>{ updateFocusableElements(); },1000);
                     } else {
-                        setTimeout(() => { skipFocusReset=false; updateFocusableElements(); if (isNavigating){ initializeFocus(); isNavigating=false;} },1000);
+                        setTimeout(()=>{ skipFocusReset=false; updateFocusableElements(); if (isNavigating){ initializeFocus(); isNavigating=false;} },1000);
                     }
                 };
 
@@ -348,7 +394,15 @@
                         case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
                         case 'ArrowLeft': updateFocusableElements(); moveFocus(0,-1); e.preventDefault(); break;
                         case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
-                        case 'Enter': handleEnter(); e.preventDefault(); e.stopPropagation(); break;
+                        case 'Enter':
+                            if (nowPlayingMode) {
+                                const spaceEvent = new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true });
+                                jellyfin.document.dispatchEvent(spaceEvent);
+                            }
+                            handleEnter();
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
                     }
                 };
 
@@ -377,6 +431,7 @@
                     window.addEventListener('popstate', handleBack, { passive:true });
                     if (mutationObserver) { mutationObserver.disconnect(); mutationObserver = null; }
                     mutationObserver = new MutationObserver(() => {
+                        checkNowPlayingMode();
                         if (!skipFocusReset) {
                             updateFocusableElements();
                             if (isNavigating) { initializeFocus(); isNavigating=false; }
@@ -389,7 +444,6 @@
                         iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive:true });
                     });
                     isInitialized = true;
-                    // Initial focus deferred until remote input
                     setTimeout(() => {
                         console.log('↪ Forcing fallback update of focusable elements (2s post-init)');
                         updateFocusableElements();
