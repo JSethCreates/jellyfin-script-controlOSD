@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v4.2.2</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v5.0.1</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -61,25 +61,24 @@
                     if (url.includes('#/video')) {
                         // Inject overlay style
                         const style = jellyfin.document.createElement('style');
-                        style.id = 'now-playing-style';
-                        style.textContent = `
-                            #nowPlayingPage .remoteControlContent.padded-left.padded-right.padded-bottom.hideVideoButtons::before {
-                                content: 'NOW PLAYING PAGE MODE';
-                                position: fixed;
-                                top: 0;
-                                left: 0;
-                                width: 100%;
-                                height: 100%;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                color: red !important;
-                                font-size: 3rem !important;
-                                pointer-events: none;
-                                z-index: 9999 !important;
-                            }
-                        `;
-                        head.appendChild(style);
+							style.id = 'now-playing-style';
+							style.textContent = `
+								body::after {
+								content: 'Jeremys UI v5.0.1 - Now Playing';
+								position: fixed;
+								top: 10px;
+								right: 12px;
+								color: lightblue;
+								font-size: 1rem;
+								font-family: sans-serif;
+								background-color: rgba(0, 0, 0, 0.3);
+								padding: 4px 8px;
+								border-radius: 4px;
+								z-index: 9999;
+								pointer-events: none;
+							}
+							`;
+							head.appendChild(style);
                         nowPlayingMode = true;
                     } else {
                         nowPlayingMode = false;
@@ -147,18 +146,16 @@
                             }
                             #navButtons button.keyboard-nav-highlight {
                                 background-color: var(--md-sys-color-primary) !important;
-                                color: var(--md-sys-color-surface) !important;
+                                color: var(--md-sys-color-on-primary) !important;
                                 transition: background-color 0.2s ease, transform 0.2s ease;
                             }
                             #navButtons button.keyboard-nav-highlight .material-icons {
-                                color: var(--md-sys-color-primary) !important;
+                                color: var(--md-sys-color-on-primary) !important;
                             }
-                            .cardBox.keyboard-nav-highlight {
-                                
+                            .cardBox.keyboard-nav-highlight {                                
 								box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
 								background-color: var(--md-sys-color-primary);
-								transform: scale(1.05); /* Slight growth */
-																
+								transform: scale(1.05); /* Slight growth */											
                             }
                             .actionSheetMenuItem.keyboard-nav-highlight,
                             .navMenuOption.keyboard-nav-highlight {
@@ -261,7 +258,7 @@
                         }
                     });
                     processed.sort((a, b) => a.top !== b.top ? a.top - b.top : a.left - b.left);
-                    let grid = [], row = [], lastTop = -1, threshold = 70;
+                    let grid = [], row = [], lastTop = -1, threshold = 30;
                     processed.forEach(item => {
                         if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
                             if (row.length) grid.push(row);
@@ -396,8 +393,12 @@
                         case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
                         case 'Enter':
                             if (nowPlayingMode) {
-                                const spaceEvent = new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true });
-                                jellyfin.document.dispatchEvent(spaceEvent);
+                                const playPauseBtn = jellyfin.document.querySelector('.btnPause, .btnPlay');
+								if (playPauseBtn) {
+									playPauseBtn.click();
+								} else if (window.top.playerController?.playPause) {
+									window.top.playerController.playPause();
+								}
                             }
                             handleEnter();
                             e.preventDefault();
