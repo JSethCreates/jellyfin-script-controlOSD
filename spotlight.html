@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v5.0.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v5.2.1</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -64,7 +64,7 @@
 							style.id = 'now-playing-style';
 							style.textContent = `
 								body::after {
-								content: 'Jeremys UI v5.0.1 - Now Playing';
+								content: 'Jeremys UI v5.0.2 - Now Playing';
 								position: fixed;
 								top: 10px;
 								right: 12px;
@@ -258,7 +258,7 @@
                         }
                     });
                     processed.sort((a, b) => a.top !== b.top ? a.top - b.top : a.left - b.left);
-                    let grid = [], row = [], lastTop = -1, threshold = 30;
+                    let grid = [], row = [], lastTop = -1, threshold = 50;
                     processed.forEach(item => {
                         if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
                             if (row.length) grid.push(row);
@@ -391,40 +391,34 @@
                         case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
                         case 'ArrowLeft': updateFocusableElements(); moveFocus(0,-1); e.preventDefault(); break;
                         case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
-                        case 'Enter':
-                            if (nowPlayingMode) {
-                                const playPauseBtn = jellyfin.document.querySelector('.btnPause, .btnPlay');
-								if (playPauseBtn) {
-									playPauseBtn.click();
-								} else if (window.top.playerController?.playPause) {
-									window.top.playerController.playPause();
-								}
-                            }
-                            handleEnter();
-                            e.preventDefault();
-                            e.stopPropagation();
-                            break;
+                 case 'Enter':
+					if (nowPlayingMode) {
+						const playPauseBtn = jellyfin.document.querySelector('.btnPause, .btnPlay');
+						if (playPauseBtn) {
+							playPauseBtn.click();
+							e.preventDefault();
+							e.stopPropagation();
+							return;
+						} else if (window.top.playerController?.playPause) {
+							window.top.playerController.playPause();
+							e.preventDefault();
+							e.stopPropagation();
+							return;
+						}
+					}
+					handleEnter();
+					e.preventDefault();
+					e.stopPropagation();
+					break;
                     }
                 };
 
                 const handleBack = () => setTimeout(() => { if (!skipFocusReset) { isInitialized = false; init(); } }, 250);
                 const handleIframeLoad = iframe => { const doc = iframe.contentDocument||iframe.contentWindow.document; if (doc) { addStyles(doc,true); injectIframeHoverStyles(doc); }};
-                const forceTVMode = () => {
-                    jellyfin.document.documentElement.classList.remove('layout-desktop','layout-mobile');
-                    jellyfin.document.documentElement.classList.add('layout-tv');
-                    const style = jellyfin.document.createElement('style');
-                    style.textContent = `
-                        .layout-tv { font-size: 88% !important; }
-                        @media (min-width: 44em) {
-                            .layout-tv { justify-content: center; }
-                            .layout-tv .headerTabs { margin: -4.0em auto 0 auto !important; width: fit-content !important; }
-                        }
-                    `;
-                    jellyfin.document.head.appendChild(style);
-                };
+
 
                 const init = () => {
-                    forceTVMode();
+                    
                     addStyles(jellyfin.document);
                     jellyfin.document.removeEventListener('keydown', handleKeydown, true);
                     jellyfin.document.addEventListener('keydown', handleKeydown, { passive:false, capture:true });
@@ -451,10 +445,25 @@
                     }, 2000);
                 };
 
-                const checkNav = () => {
-                    const newLoc = window.top.location.href + window.top.location.hash;
-                    if (newLoc !== currentLocation) { currentLocation=newLoc; isInitialized=false; isNavigating=false; init(); }
-                };
+				const checkNav = () => {
+					const newLoc = window.top.location.href + window.top.location.hash;
+					if (newLoc !== currentLocation) {
+						currentLocation = newLoc;
+						isInitialized = false;
+						isNavigating = false;
+
+						if (previousElement) {
+							previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
+						}
+						previousElement = null;
+						currentRow = -1;
+						currentCol = -1;
+						focusableElements = [];
+
+						init();
+					}
+				};
+
 
                 setInterval(checkNav, 250);
                 window.addEventListener('hashchange', () => { isInitialized=false; isNavigating=false; init(); }, { passive:true });
