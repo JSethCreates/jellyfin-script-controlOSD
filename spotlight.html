@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v5.2.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v5.4.0</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -64,7 +64,7 @@
 							style.id = 'now-playing-style';
 							style.textContent = `
 								body::after {
-								content: 'Jeremys UI v5.0.2 - Now Playing';
+								content: 'Jeremys UI v5.2.4';
 								position: fixed;
 								top: 10px;
 								right: 12px;
@@ -222,7 +222,10 @@
                         const style = doc.createElement('style');
                         style.id = 'iframe-hover-styles';
                         style.textContent = `
-                            .slide.hover .logo { transform: translateY(-50%) translateX(-50%) scale(1.35) !important; }
+                            .slide.hover .logo {
+								transform: translateY(-50%) translateX(-50%) scale(1.35) !important;
+								opacity: 0.1 !important;
+							}
                             .slide.hover .lorem-ipsum { opacity: 1; }
                         `;
                         doc.head.appendChild(style);
@@ -234,7 +237,42 @@
                     if (slide) slide.classList.toggle('hover', add);
                 };
 
-                const isElementVisible = el => el.offsetParent && ['input','textarea'].indexOf(el.tagName.toLowerCase()) === -1 && el.offsetWidth > 0 && el.offsetHeight > 0;
+                function isElementVisible(el) {
+				  // 1) size check
+				  const rect = el.getBoundingClientRect();
+				  if (rect.width === 0 || rect.height === 0) return false;
+
+				  // 2) viewport intersection
+				  if (
+					rect.bottom < 0 ||
+					rect.top    > (window.innerHeight || document.documentElement.clientHeight) ||
+					rect.right  < 0 ||
+					rect.left   > (window.innerWidth  || document.documentElement.clientWidth)
+				  ) return false;
+
+				  // 3) computed-style hiding
+				  const style = window.getComputedStyle(el);
+				  if (
+					style.display === 'none' ||
+					style.visibility !== 'visible' ||
+					parseFloat(style.opacity) === 0
+				  ) return false;
+
+				  // 4) ancestor hiding
+				  let parent = el.parentElement;
+				  while (parent) {
+					const pStyle = window.getComputedStyle(parent);
+					if (
+					  pStyle.display === 'none' ||
+					  pStyle.visibility !== 'visible' ||
+					  parseFloat(pStyle.opacity) === 0
+					) return false;
+					parent = parent.parentElement;
+				  }
+
+				  return true;
+				}
+
 
                 const updateFocusableElements = () => {
                     checkNowPlayingMode();
@@ -298,6 +336,10 @@
                                 if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
                             }
                         }
+						if (previousElement?.id === 'mediaButton') {
+							const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+							if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+						}
                         newEl.classList.add('keyboard-nav-highlight');
                         if (newEl.classList.contains('emby-scrollbuttons-button')) newEl.classList.add('highlight-chevron');
                         scrollIntoView(newEl);
@@ -305,6 +347,10 @@
                             const iframe = jellyfin.document.querySelector('iframe.featurediframe');
                             if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
                         }
+						if (newEl.id === 'mediaButton') {
+							const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+							if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
+						}
                         currentRow = nr; currentCol = nc; previousElement = newEl;
                     }
                 };
@@ -313,10 +359,25 @@
                     checkNowPlayingMode();
                     updateFocusableElements();
                     let first = null;
-                    const rightButton = jellyfin.document.querySelector('#rightButton');
-                    if (rightButton && isElementVisible(rightButton)) first = rightButton;
+                    let rightButton = null;
+					const iframe = jellyfin.document.querySelector('.featurediframe');
+					if (iframe && iframe.contentDocument) {
+						const innerDoc = iframe.contentDocument;
+						const btn = innerDoc.querySelector('#rightButton');
+						if (btn && isElementVisible(btn)) {
+							rightButton = btn;
+						}
+					}
+					if (rightButton) {
+						first = rightButton;
+					}
                     else {
-                        const priSel = ['button[is="emby-button"][data-action="resume"]', 'button[is="emby-button"][data-action="play"]', '.itemsContainer .cardBox'];
+                        const priSel = [
+						  'button.btnPause',
+						  'button[is="emby-button"][data-action="resume"]',
+						  'button[is="emby-button"][data-action="play"]',
+						  '.itemsContainer .cardBox'
+						];
                         for (const sel of priSel) {
                             const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
                             if (elems.length) { first = elems[0]; break; }
@@ -391,26 +452,18 @@
                         case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
                         case 'ArrowLeft': updateFocusableElements(); moveFocus(0,-1); e.preventDefault(); break;
                         case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
-                 case 'Enter':
-					if (nowPlayingMode) {
-						const playPauseBtn = jellyfin.document.querySelector('.btnPause, .btnPlay');
-						if (playPauseBtn) {
-							playPauseBtn.click();
+						case 'Enter':
+							if (nowPlayingMode) {
+								const playPauseBtn = jellyfin.document.querySelector('.btnPause, .btnPlay');
+								if (playPauseBtn) {
+									playPauseBtn.click();
+								}
+							}
+							handleEnter();
 							e.preventDefault();
 							e.stopPropagation();
-							return;
-						} else if (window.top.playerController?.playPause) {
-							window.top.playerController.playPause();
-							e.preventDefault();
-							e.stopPropagation();
-							return;
-						}
+							break;
 					}
-					handleEnter();
-					e.preventDefault();
-					e.stopPropagation();
-					break;
-                    }
                 };
 
                 const handleBack = () => setTimeout(() => { if (!skipFocusReset) { isInitialized = false; init(); } }, 250);
