@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v5.4.0</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v6.0.1</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -64,7 +64,7 @@
 							style.id = 'now-playing-style';
 							style.textContent = `
 								body::after {
-								content: 'Jeremys UI v5.2.4';
+								content: '';
 								position: fixed;
 								top: 10px;
 								right: 12px;
@@ -94,6 +94,44 @@
                     const b = bigint & 255;
                     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
                 }
+				
+				function describe(el) {
+				  const parts = [el.tagName.toLowerCase()];
+				  if (el.id)       parts.push(`#${el.id}`);
+				  if (el.classList.length) parts.push(`.${[...el.classList].join('.')}`);
+				  const label = el.getAttribute('aria-label') || el.title;
+				  if (label)       parts.push(`("${label}")`);
+				  return parts.join('');
+				}
+				
+				// --- state reset on location change ---
+				function handleLocationChange() {
+					// 1) remove any existing highlight
+					if (previousElement) {
+						previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+					}
+
+					// 2) reset pointers & arrays
+					focusableElements = [];
+					currentRow = -1;
+					currentCol = -1;
+					previousElement = null;
+
+					// 3) rebuild and re-initialize focus
+					updateFocusableElements();
+					initializeFocus();
+				}
+
+				// 4) listen for SPA nav events
+				window.addEventListener('hashchange', handleLocationChange);
+				window.addEventListener('popstate', handleLocationChange);
+
+				// —if Jellyfin uses history.pushState directly, you can also patch it:
+				const _pushState = history.pushState;
+				history.pushState = function (...args) {
+					_pushState.apply(this, args);
+					handleLocationChange();
+				};
 
                 const addStyles = (doc, isIframe = false) => {
                     if (!doc.getElementById('tv-nav-styles')) {
@@ -206,7 +244,7 @@
                                 box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.25) !important;
                             }
                             .btnPlay.detailButton.keyboard-nav-highlight {
-                                transform: scale(1.2) !important;
+                                transform: translateY(-0.7em) scale(1.2) !important;
 								color: var(--md-sys-color-surface) !important;
 								background-color: var(--md-sys-color-primary) !important;
                                 box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
@@ -238,27 +276,17 @@
                 };
 
                 function isElementVisible(el) {
-				  // 1) size check
-				  const rect = el.getBoundingClientRect();
-				  if (rect.width === 0 || rect.height === 0) return false;
-
-				  // 2) viewport intersection
-				  if (
-					rect.bottom < 0 ||
-					rect.top    > (window.innerHeight || document.documentElement.clientHeight) ||
-					rect.right  < 0 ||
-					rect.left   > (window.innerWidth  || document.documentElement.clientWidth)
-				  ) return false;
-
-				  // 3) computed-style hiding
+				  // 3) computed-style hiding on the element itself
 				  const style = window.getComputedStyle(el);
 				  if (
 					style.display === 'none' ||
 					style.visibility !== 'visible' ||
 					parseFloat(style.opacity) === 0
-				  ) return false;
+				  ) {
+					return false;
+				  }
 
-				  // 4) ancestor hiding
+				  // 4) computed-style hiding on any ancestor
 				  let parent = el.parentElement;
 				  while (parent) {
 					const pStyle = window.getComputedStyle(parent);
@@ -266,13 +294,14 @@
 					  pStyle.display === 'none' ||
 					  pStyle.visibility !== 'visible' ||
 					  parseFloat(pStyle.opacity) === 0
-					) return false;
+					) {
+					  return false;
+					}
 					parent = parent.parentElement;
 				  }
 
 				  return true;
 				}
-
 
                 const updateFocusableElements = () => {
                     checkNowPlayingMode();
@@ -329,6 +358,7 @@
                     else if (nc >= focusableElements[nr].length) nc = 0;
                     if (focusableElements[nr]) {
                         const newEl = focusableElements[nr][nc];
+						console.log('Focus moved to:', describe(newEl));
                         if (previousElement) {
                             previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
                             if (previousElement.classList.contains('clickable-overlay')) {
@@ -355,57 +385,75 @@
                     }
                 };
 
-                const initializeFocus = () => {
-                    checkNowPlayingMode();
-                    updateFocusableElements();
-                    let first = null;
-                    let rightButton = null;
-					const iframe = jellyfin.document.querySelector('.featurediframe');
-					if (iframe && iframe.contentDocument) {
-						const innerDoc = iframe.contentDocument;
-						const btn = innerDoc.querySelector('#rightButton');
+				const initializeFocus = () => {
+					checkNowPlayingMode();
+					updateFocusableElements();
+
+					const url = window.top.location.href;
+					let first = null;
+
+					// 1) If on the homepage, focus the rightButton inside the featured iframe
+					if (url.includes('#/home.html')) {
+						const iframe = jellyfin.document.querySelector('.featurediframe');
+						const btn = iframe?.contentDocument?.querySelector('#rightButton');
 						if (btn && isElementVisible(btn)) {
-							rightButton = btn;
+							first = btn;
 						}
 					}
-					if (rightButton) {
-						first = rightButton;
+					// 2) Else if on a video page, focus the pause button
+					else if (url.includes('#/video')) {
+						const btnPause = jellyfin.document.querySelector('button.btnPause');
+						if (btnPause && isElementVisible(btnPause)) {
+							first = btnPause;
+						}
 					}
-                    else {
-                        const priSel = [
-						  'button.btnPause',
-						  'button[is="emby-button"][data-action="resume"]',
-						  'button[is="emby-button"][data-action="play"]',
-						  '.itemsContainer .cardBox'
+
+					// 3) Otherwise use your default priority selectors
+					if (!first) {
+						const priSel = [
+							'button[is="emby-button"][data-action="resume"]',
+							'button[is="emby-button"][data-action="play"]',
+							'.itemsContainer .cardBox'
 						];
-                        for (const sel of priSel) {
-                            const elems = Array.from(jellyfin.document.querySelectorAll(sel)).filter(isElementVisible);
-                            if (elems.length) { first = elems[0]; break; }
-                        }
-                    }
-                    if (!first && focusableElements.length && focusableElements[0].length) first = focusableElements[0][0];
-                    if (first) {
-                        if (previousElement && previousElement !== first) {
-                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-                            if (previousElement.classList.contains('clickable-overlay')) {
-                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                                if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
-                            }
-                        }
-                        first.classList.add('keyboard-nav-highlight');
-                        if (first.classList.contains('emby-scrollbuttons-button')) first.classList.add('highlight-chevron');
-                        scrollIntoView(first);
-                        if (first.classList.contains('clickable-overlay')) {
-                            const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                            if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
-                        }
-                        for (let i = 0; i < focusableElements.length; i++) {
-                            const ci = focusableElements[i].indexOf(first);
-                            if (ci !== -1) { currentRow = i; currentCol = ci; break; }
-                        }
-                        previousElement = first;
-                    } else { currentRow = currentCol = -1; }
-                };
+						for (const sel of priSel) {
+							const el = jellyfin.document.querySelector(sel);
+							if (el && isElementVisible(el)) {
+								first = el;
+								break;
+							}
+						}
+					}
+
+					// 4) Fallback to the first item in your grid
+					if (!first && focusableElements.length && focusableElements[0].length) {
+						first = focusableElements[0][0];
+					}
+
+					// 5) Finally, highlight and scroll into view as before
+					if (first) {
+						if (previousElement && previousElement !== first) {
+							previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+							// … (any iframe hover cleanup)
+						}
+						first.classList.add('keyboard-nav-highlight');
+						if (first.classList.contains('emby-scrollbuttons-button')) first.classList.add('highlight-chevron');
+						scrollIntoView(first);
+						// … (any iframe hover setup)
+
+						// update your row/col & previousElement pointers
+						for (let i = 0; i < focusableElements.length; i++) {
+							const ci = focusableElements[i].indexOf(first);
+							if (ci !== -1) {
+								currentRow = i;
+								currentCol = ci;
+								break;
+							}
+						}
+						previousElement = first;
+					} else {
+						currentRow = currentCol = -1;
+					}
+				};
 
                 const handleEnter = () => {
                     if (currentRow === -1 || currentCol === -1) {
@@ -413,6 +461,7 @@
                         return;
                     }
                     const active = focusableElements[currentRow][currentCol];
+					console.log('Enter pressed on:', describe(active));
                     if (active.classList.contains('video-player') || active.querySelector('.video-player')) {
                         const spotIframe = jellyfin.document.querySelector('.featurediframe');
                         if (spotIframe?.contentWindow?.controlYouTubePlayer) {
@@ -454,11 +503,29 @@
                         case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
 						case 'Enter':
 							if (nowPlayingMode) {
-								const playPauseBtn = jellyfin.document.querySelector('.btnPause, .btnPlay');
-								if (playPauseBtn) {
-									playPauseBtn.click();
+								// fully intercept Enter on the video page…
+								e.preventDefault();
+								e.stopPropagation();
+								// move virtual focus to the play/pause button
+								const btnPause = jellyfin.document.querySelector('.btnPause');
+								if (btnPause) {
+									if (previousElement) {
+										previousElement.classList.remove('keyboard-nav-highlight','highlight-chevron','video-focused');
+									}
+									previousElement = btnPause;
+									btnPause.classList.add('keyboard-nav-highlight');
 								}
+								// …and synthesize a 'k' keydown, which Jellyfin uses for play/pause
+								const kEvent = new KeyboardEvent('keydown', {
+									key: 'k',
+									code: 'KeyK',
+									bubbles: true,
+									cancelable: true
+								});
+								jellyfin.document.dispatchEvent(kEvent);
+								return;
 							}
+							// otherwise fall back to your normal Enter behavior
 							handleEnter();
 							e.preventDefault();
 							e.stopPropagation();
