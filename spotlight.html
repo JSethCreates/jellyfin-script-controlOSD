@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Handler v6.0.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.1.1</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -23,9 +23,44 @@
                     skipFocusReset = false;
                 let isNavigating = false; // Navigation flag
                 let nowPlayingMode = false; // Track now-playing page
+				let osdExtrasActive = false; // Further OSD Mode
                 let focusableElements = [],
                     currentRow = -1,
                     currentCol = -1;
+					
+				const osdElementsToHide = [
+				  '.btnPip',
+				  '.btnVideoOsdSettings',
+				  '.btnAudio',
+				  '.btnSubtitles',
+				  '.btnUserRating',
+				  '.btnNextTrack',
+				  '.btnNextChapter',
+				  '.btnFastForward',
+				  '.btnRewind',
+				  '.btnPreviousChapter',
+				  '.btnPreviousTrack',
+				  '.osdTimeText',
+				  '.osdRatingsText',
+				  '.btnFullscreen',
+				  '.volumeButtons'
+				];
+
+				function hideOsdExtras() {
+				  osdElementsToHide.forEach(sel =>
+					jellyfin.document.querySelectorAll(sel).forEach(el =>
+					  el.classList.add('osd-hidden')
+					)
+				  );
+				}
+
+				function showOsdExtras() {
+				  osdElementsToHide.forEach(sel =>
+					jellyfin.document.querySelectorAll(sel).forEach(el =>
+					  el.classList.remove('osd-hidden')
+					)
+				  );
+				}
 
                 const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
                 const selectors = `
@@ -77,9 +112,29 @@
 								z-index: 9999;
 								pointer-events: none;
 							}
+							.osd-hidden {
+								display: none !important;
+							}
 							`;
 							head.appendChild(style);
                         nowPlayingMode = true;
+						if (!osdExtrasActive) hideOsdExtras();
+						const osdBottom = jellyfin.document.querySelector('.videoOsdBottom');
+						if (osdBottom) {
+							const observer = new MutationObserver(() => {
+								const hidden = osdBottom.classList.contains('videoOsdBottom-hidden') || osdBottom.classList.contains('hide');
+								if (hidden && osdExtrasActive) {
+									hideOsdExtras();
+									osdExtrasActive = false;
+								}
+							});
+
+							observer.observe(osdBottom, {
+								attributes: true,
+								attributeFilter: ['class']
+							});
+						}
+						
                     } else {
                         nowPlayingMode = false;
                     }
@@ -497,7 +552,15 @@
                         return;
                     }
                     switch(e.key) {
-                        case 'ArrowUp': updateFocusableElements(); moveFocus(-1,0); e.preventDefault(); break;
+                        case 'ArrowUp':
+							moveFocus(-1, 0);
+							if (nowPlayingMode) {
+								osdExtrasActive = true;
+								showOsdExtras();
+								updateFocusableElements();
+							}
+							e.preventDefault();
+							break;
                         case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
                         case 'ArrowLeft': updateFocusableElements(); moveFocus(0,-1); e.preventDefault(); break;
                         case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
