@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.1.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.1.2</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -558,41 +558,92 @@
 								osdExtrasActive = true;
 								showOsdExtras();
 								updateFocusableElements();
-							}
-							e.preventDefault();
-							break;
-                        case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
-                        case 'ArrowLeft': updateFocusableElements(); moveFocus(0,-1); e.preventDefault(); break;
-                        case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
-						case 'Enter':
-							if (nowPlayingMode) {
-								// fully intercept Enter on the video page…
-								e.preventDefault();
-								e.stopPropagation();
-								// move virtual focus to the play/pause button
 								const btnPause = jellyfin.document.querySelector('.btnPause');
 								if (btnPause) {
-									if (previousElement) {
-										previousElement.classList.remove('keyboard-nav-highlight','highlight-chevron','video-focused');
-									}
-									previousElement = btnPause;
-									btnPause.classList.add('keyboard-nav-highlight');
+								  if (previousElement) {
+									previousElement.classList.remove(
+									  'keyboard-nav-highlight',
+									  'highlight-chevron',
+									  'video-focused'
+									);
+								  }
+								  previousElement = btnPause;
+								  btnPause.classList.add('keyboard-nav-highlight');
 								}
-								// …and synthesize a 'k' keydown, which Jellyfin uses for play/pause
-								const kEvent = new KeyboardEvent('keydown', {
-									key: 'k',
-									code: 'KeyK',
-									bubbles: true,
-									cancelable: true
-								});
-								jellyfin.document.dispatchEvent(kEvent);
-								return;
 							}
-							// otherwise fall back to your normal Enter behavior
-							handleEnter();
+							e.preventDefault();
+							break;
+							
+                        case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
+						
+                        case 'ArrowLeft':
+						  if (nowPlayingMode && osdExtrasActive) {
+							// navigating within the extras — don’t let Jellyfin see this key
+							moveFocus(0, -1);
 							e.preventDefault();
 							e.stopPropagation();
-							break;
+						  }
+						  // else, fall through: let it propagate to rewind
+						  break;
+
+						case 'ArrowRight':
+						  if (nowPlayingMode && osdExtrasActive) {
+							// navigating within the extras — don’t let Jellyfin see this key
+							moveFocus(0, 1);
+							e.preventDefault();
+							e.stopPropagation();
+						  }
+						  // else, fall through: let it propagate to fast-forward
+						  break;
+						  
+						case 'Enter':
+						  // 1) Extended OSD up → click the highlighted button directly
+						  if (nowPlayingMode && osdExtrasActive) {
+							e.preventDefault();
+							e.stopPropagation();
+							// find whichever element carries your keyboard-nav-highlight class
+							const highlighted = jellyfin.document.querySelector('.keyboard-nav-highlight');
+							if (highlighted) {
+							  highlighted.click();
+							}
+							return;
+						  }
+
+						  // 2) Minimized OSD only → intercept Enter into a 'k'
+						  if (nowPlayingMode) {
+							e.preventDefault();
+							e.stopPropagation();
+
+							// move virtual focus to play/pause
+							const btnPause = jellyfin.document.querySelector('.btnPause');
+							if (btnPause) {
+							  if (previousElement) {
+								previousElement.classList.remove(
+								  'keyboard-nav-highlight',
+								  'highlight-chevron',
+								  'video-focused'
+								);
+							  }
+							  previousElement = btnPause;
+							  btnPause.classList.add('keyboard-nav-highlight');
+							}
+
+							// dispatch the 'k' key
+							const kEvent = new KeyboardEvent('keydown', {
+							  key: 'k',
+							  code: 'KeyK',
+							  bubbles: true,
+							  cancelable: true
+							});
+							jellyfin.document.dispatchEvent(kEvent);
+							return;
+						  }
+
+						  // 3) All other contexts → your normal Enter behavior
+						  handleEnter();
+						  e.preventDefault();
+						  e.stopPropagation();
+						  break;
 					}
                 };
 
