@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.2.0</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.2.1</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -667,7 +667,7 @@
 				};
 
 
-                setInterval(checkNav, 250);
+                setInterval(checkNav, 1250);
                 window.addEventListener('hashchange', () => { isInitialized=false; isNavigating=false; init(); }, { passive:true });
                 init();
             }, 800);
