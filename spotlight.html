@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.2.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.4.0</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -86,20 +86,21 @@
 
                 // Detect Now Playing page and show indicator
                 function checkNowPlayingMode() {
-                    const url = window.top.location.href;
-                    const head = jellyfin.document.head;
-                    // Remove existing style
-                    const existingStyle = jellyfin.document.getElementById('now-playing-style');
-                    if (existingStyle) {
-                        existingStyle.remove();
-                    }
-                    if (url.includes('#/video')) {
-                        // Inject overlay style
-                        const style = jellyfin.document.createElement('style');
-							style.id = 'now-playing-style';
-							style.textContent = `
-								body::after {
-								content: '';
+					const url = window.top.location.href;
+					const head = jellyfin.document.head;
+					// Remove existing style
+					const existingStyle = jellyfin.document.getElementById('now-playing-style');
+					if (existingStyle) {
+						existingStyle.remove();
+					}
+
+					if (url.includes('#/video')) {
+						// Inject overlay style
+						const style = jellyfin.document.createElement('style');
+						style.id = 'now-playing-style';
+						style.textContent = `
+							body::after {
+								content: '6.3.2';
 								position: fixed;
 								top: 10px;
 								right: 12px;
@@ -115,30 +116,93 @@
 							.osd-hidden {
 								display: none !important;
 							}
-							`;
-							head.appendChild(style);
-                        nowPlayingMode = true;
+						`;
+						head.appendChild(style);
+
+						nowPlayingMode = true;
 						if (!osdExtrasActive) hideOsdExtras();
+
 						const osdBottom = jellyfin.document.querySelector('.videoOsdBottom');
 						if (osdBottom) {
 							const observer = new MutationObserver(() => {
-								const hidden = osdBottom.classList.contains('videoOsdBottom-hidden') || osdBottom.classList.contains('hide');
+								const hidden = osdBottom.classList.contains('videoOsdBottom-hidden') ||
+											   osdBottom.classList.contains('hide');
 								if (hidden && osdExtrasActive) {
 									hideOsdExtras();
 									osdExtrasActive = false;
 								}
 							});
-
-							observer.observe(osdBottom, {
-								attributes: true,
-								attributeFilter: ['class']
-							});
+							observer.observe(osdBottom, { attributes: true, attributeFilter: ['class'] });
 						}
-						
-                    } else {
-                        nowPlayingMode = false;
-                    }
-                }
+
+						// ─── Inject Parent-Show Logo Once ───────────────────────────────────────────
+						(function() {
+							// ▶︎ only run once
+							if (jellyfin.document.getElementById('parent-show-logo')) return;
+
+							const guidRe      = /\b[0-9a-f]{32}\b/gi;
+							const seen        = new Set();
+
+							// 1. Gather every GUID in the Jellyfin DOM
+							jellyfin.document.querySelectorAll('*').forEach(el =>
+								Array.from(el.attributes).forEach(attr => {
+									let m;
+									guidRe.lastIndex = 0;
+									while ((m = guidRe.exec(attr.value)) !== null) {
+										seen.add(m[0]);
+									}
+								})
+							);
+
+							const ids         = [...seen];
+							const maxAttempts = 3;
+							const logoStyles  = {
+								position:  'fixed',
+								top:       '3.5em',
+								left:      '10px',
+								maxWidth:  '400px',
+								maxHeight: '400px',
+								transformOrigin:'top left',
+								zIndex:    999
+							};
+
+							function tryNext(idx) {
+								if (idx >= ids.length || idx >= maxAttempts) return;
+								const id = ids[idx];
+								fetch(`/Items/${id}/Images/Logo`, {
+									method:      'HEAD',
+									credentials: 'same-origin'
+								})
+								.then(res => {
+									if (res.ok) {
+										const img = jellyfin.document.createElement('img');
+										img.id = 'parent-show-logo';
+										img.src = `/Items/${id}/Images/Logo`;
+										img.alt = 'Jellyfin Logo';
+										Object.assign(img.style, logoStyles);
+										jellyfin.document.body.appendChild(img);
+										console.log('Logo injector: logo loaded for', id);
+									} else {
+										tryNext(idx + 1);
+									}
+								})
+								.catch(() => {
+									tryNext(idx + 1);
+								});
+							}
+
+							tryNext(0);
+						})();
+					} else {
+						// Remove injected logo when leaving video page
+						const existingLogo = jellyfin.document.getElementById('parent-show-logo');
+						if (existingLogo) {
+							existingLogo.remove();
+						}
+						nowPlayingMode = false;
+					}
+				}
+
 
                 function hexToRgba(hex, alpha) {
                     hex = hex.replace('#', '');
@@ -220,18 +284,24 @@
 							.sliderContainer {
 							  position: relative !important;
 							  left: 1.5em !important;
+							  max-width: 90% !important;
 							}
+
+							.osdTextContainer.endTimeText.osdDurationText {
+							  position: relative !important;
+							  left: 1em !important;
+							}
+
 
 							button.btnPause,
 							button.btnPause.keyboard-nav-highlight {
 
-							  bottom: 2.4em !important;
+							  bottom: 2.6em !important;
 							  left: 4em !important;
-							  transform: scale(1.2) !important;
-							  width: 4em !important;
+							  transform: scale(1.6) !important;
 							  border-radius: 12px !important;
-							  color: var(--md-sys-color-primary) !important;
-                              background-color: var(--md-sys-color-on-primary) !important;
+							  background-color: var(--md-sys-color-primary) !important;
+                              color: var(--md-sys-color-on-primary) !important;
 							  z-index: 999;
 							}
 
@@ -278,8 +348,8 @@
                                             var(--border-color) border-box !important;
                             }
                             .paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
-                                background-color: var(--md-sys-color-surface) !important;
-                                color: var(--md-sys-color-primary) !important;
+                                color: var(--md-sys-color-surface) !important;
+                                background-color: var(--md-sys-color-primary) !important;
                             }
                             .formDialogHeader .btnCancel.keyboard-nav-highlight {
                                 background-color: var(--md-hover-primary) !important;
