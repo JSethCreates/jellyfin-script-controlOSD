@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.4.2</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.4.3</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
@@ -86,7 +86,7 @@
 
                 const jellyfin = (() => { try { return window.parent.document ? window.parent : window; } catch { return window; } })();
 
-                // Detect Now Playing page and show indicator
+                // Detect Now Playing page
                 function checkNowPlayingMode() {
 					const url = window.top.location.href;
 					const head = jellyfin.document.head;
@@ -103,7 +103,7 @@
 						style.textContent = `
 						#osdMoreText {
 							position: fixed;
-							top: 10px;
+							bottom: 10em;
 							right: 12px;
 							color: lightblue;
 							font-size: 1rem;
@@ -136,7 +136,7 @@
 							if (!jellyfin.document.getElementById('osdMoreText')) {
 								const versionText = jellyfin.document.createElement('div');
 								versionText.id = 'osdMoreText';
-								versionText.textContent = '-------------------------6.4.2----------------------------';
+								versionText.textContent = '-------------------------6.4.3----------------------------';
 								versionText.classList.add('osd-hidden');
 								body.appendChild(versionText);
 							}
@@ -162,13 +162,13 @@
 
 						// ─── Inject Parent-Show Logo Once ───────────────────────────────────────────
 						(function() {
-							// ▶︎ only run once
+							
 							if (jellyfin.document.getElementById('parent-show-logo')) return;
 
 							const guidRe      = /\b[0-9a-f]{32}\b/gi;
 							const seen        = new Set();
 
-							// 1. Gather every GUID in the Jellyfin DOM
+							// 1. Gather the GUID in the Jellyfin DOM
 							jellyfin.document.querySelectorAll('*').forEach(el =>
 								Array.from(el.attributes).forEach(attr => {
 									let m;
@@ -182,7 +182,7 @@
 							const ids         = [...seen];
 							const maxAttempts = 3;
 							const logoStyles  = {
-								position:  'fixed',
+								position:  'absolute',
 								top:       '10px',
 								left:      '10px',
 								maxWidth:  '400px',
@@ -205,7 +205,11 @@
 										img.src = `/Items/${id}/Images/Logo`;
 										img.alt = 'Jellyfin Logo';
 										Object.assign(img.style, logoStyles);
-										jellyfin.document.body.appendChild(img);
+										const headerTop = jellyfin.document.querySelector('.osdHeader .headerTop');
+											if (headerTop) {
+												img.style.position = 'absolute'; // adjust positioning since it's now relative to .headerTop
+												headerTop.appendChild(img);
+											}
 										console.log('Logo injector: logo loaded for', id);
 									} else {
 										tryNext(idx + 1);
@@ -316,7 +320,7 @@
 							  position: relative !important;
 							  left: 1em !important;
 							}
-							
+
 							button.btnPause,
 							button.btnPause.keyboard-nav-highlight {
 
@@ -423,6 +427,7 @@
                     }
                 };
 
+				// Used when workign with Spotlight Mod featured iframe
                 const injectIframeHoverStyles = doc => {
                     if (!doc.getElementById('iframe-hover-styles')) {
                         const style = doc.createElement('style');
@@ -673,8 +678,36 @@
 							e.preventDefault();
 							break;
                         case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
-                        case 'ArrowLeft': updateFocusableElements(); moveFocus(0,-1); e.preventDefault(); break;
-                        case 'ArrowRight': updateFocusableElements(); moveFocus(0,1); e.preventDefault(); break;
+                        
+						case 'ArrowLeft':
+						case 'ArrowRight': {
+							const direction = e.key === 'ArrowLeft' ? -1 : 1;
+
+							if (nowPlayingMode && !osdExtrasActive) {
+								const slider = jellyfin.document.querySelector('.osdPositionSlider');
+								if (slider && isElementVisible(slider)) {
+									if (previousElement) {
+										previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+									}
+									previousElement = slider;
+									slider.classList.add('keyboard-nav-highlight');
+									slider.focus(); // 👈 Move focus to slider thumb
+									scrollIntoView(slider);
+									
+									// Let the key event propagate for native skip behavior
+									return;
+								}
+							}
+
+							// Normal navigation (either extended OSD is active or not in video mode)
+							updateFocusableElements();
+							moveFocus(0, direction);
+							e.preventDefault();
+							break;
+						}
+
+
+
 						case 'Enter':
 							if (nowPlayingMode) {
 								// fully intercept Enter on the video page…
