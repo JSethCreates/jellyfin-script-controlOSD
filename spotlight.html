@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.4.3</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.5.0</title>
     <style>
         :root { --highlight-color: #6750A4; }
         .keyboard-nav-highlight {
             background-color: var(--highlight-color) !important;
             transform: scale(1.15);
             transition: transform 0.3s ease, outline 0.3s ease, box-shadow 0.3s ease;
-            box-shadow: 0 10px 20px rgba(106,0,179,0.6) !important;
+
         }
         .highlight-chevron { background-color: var(--highlight-color) !important; }
         .featurediframe .keyboard-nav-highlight { transform: none !important; box-shadow: none !important; }
@@ -312,8 +312,8 @@
 
 							.sliderContainer {
 							  position: relative !important;
-							  left: 1.5em !important;
-							  max-width: 90% !important;
+							  left: 1.8em !important;
+							  max-width: 88% !important;
 							}
 
 							.osdTextContainer.endTimeText.osdDurationText {
@@ -325,9 +325,9 @@
 							button.btnPause.keyboard-nav-highlight {
 
 							  bottom: 2.6em !important;
-							  left: 4em !important;
+							  left: 5em !important;
 							  transform: scale(1.6) !important;
-							  border-radius: 8px !important;
+							  border-radius: 6px !important;
 							  background-color: var(--md-sys-color-primary) !important;
                               color: var(--md-sys-color-on-primary) !important;
 							  z-index: 999;
@@ -336,8 +336,8 @@
                             .keyboard-nav-highlight {
                                 position: relative;
                                 transition: transform 0.3s ease, background-color 0.3s ease;
-                                box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`} ;
-                                animation: ${isIframe ? 'none' : 'pulse-glow 2s infinite'};
+                                // box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`} ;
+                                // animation: ${isIframe ? 'none' : 'pulse-glow 2s infinite'};
                                 z-index: 1;
                             }
                             @keyframes pulse-glow {
@@ -659,6 +659,9 @@
                     }
                 };
 
+               
+                // Input handling
+
                 const handleKeydown = e => {
                     const activeEl = jellyfin.document.activeElement, tag = activeEl.tagName.toLowerCase();
                     if (['input','textarea'].includes(tag) || activeEl.isContentEditable) return;
@@ -683,30 +686,34 @@
 						case 'ArrowRight': {
 							const direction = e.key === 'ArrowLeft' ? -1 : 1;
 
-							if (nowPlayingMode && !osdExtrasActive) {
-								const slider = jellyfin.document.querySelector('.osdPositionSlider');
-								if (slider && isElementVisible(slider)) {
-									if (previousElement) {
-										previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-									}
-									previousElement = slider;
-									slider.classList.add('keyboard-nav-highlight');
-									slider.focus(); // 👈 Move focus to slider thumb
-									scrollIntoView(slider);
-									
-									// Let the key event propagate for native skip behavior
-									return;
-								}
+							if (osdExtrasActive) {
+								// Stay in OSD extras mode — navigate using virtual focus
+								updateFocusableElements();
+								moveFocus(0, direction);
+								e.preventDefault();
+								e.stopPropagation();
+								break;
 							}
 
-							// Normal navigation (either extended OSD is active or not in video mode)
+							// Try to focus the slider
+							const slider = jellyfin.document.querySelector('.osdPositionSlider');
+							if (slider && isElementVisible(slider)) {
+								if (previousElement) {
+									previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+								}
+								previousElement = slider;
+								slider.classList.add('keyboard-nav-highlight');
+								slider.focus(); // allow native handling after that
+								scrollIntoView(slider);
+								return;
+							}
+
+							// Fallback navigation
 							updateFocusableElements();
 							moveFocus(0, direction);
 							e.preventDefault();
 							break;
 						}
-
-
 
 						case 'Enter':
 							if (nowPlayingMode) {
