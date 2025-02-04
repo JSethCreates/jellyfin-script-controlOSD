@@ -1,329 +1,97 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.5.3</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.1</title>
     <style>
-		@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: #6750A4; }
+
+        /* Basic highlight classes */
         .keyboard-nav-highlight {
             background-color: var(--highlight-color) !important;
             transform: scale(1.15);
             transition: transform 0.3s ease, outline 0.3s ease, box-shadow 0.3s ease;
-
         }
-        .highlight-chevron { background-color: var(--highlight-color) !important; }
-        .featurediframe .keyboard-nav-highlight { transform: none !important; box-shadow: none !important; }
+        .highlight-chevron {
+            background-color: var(--highlight-color) !important;
+        }
+        .featurediframe .keyboard-nav-highlight {
+            transform: none !important;
+            box-shadow: none !important;
+        }
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
-                let isInitialized = false,
-                    currentLocation = '',
-                    previousElement = null,
-                    mutationObserver = null,
-                    skipFocusReset = false;
-					_logoObserver = null;
-                let isNavigating = false; // Navigation flag
-                let nowPlayingMode = false; // Track now-playing page
-				let osdExtrasActive = false; // Further OSD Mode
-                let focusableElements = [],
-                    currentRow = -1,
-                    currentCol = -1;
-					
-				const osdElementsToHide = [
-				  '.btnPip',
-				  '.btnVideoOsdSettings',
-				  '.btnAudio',
-				  '.btnSubtitles',
-				  '.btnUserRating',
-				  '.btnNextTrack',
-				  '.btnNextChapter',
-				  '.btnFastForward',
-				  '.btnRewind',
-				  '.btnPreviousChapter',
-				  '.btnPreviousTrack',
-				  '.osdTimeText',
-				  '.osdRatingsText',
-				  '.btnFullscreen',
-				  '.volumeButtons',
-				  '#osdMoreText'
-				];
+                // ───────────────────────────────────────────────────────────────────────────────
+                // GLOBAL VARIABLES & STATE
+                // ───────────────────────────────────────────────────────────────────────────────
+                let isInitialized      = false;
+                let currentLocation    = '';
+                let previousElement    = null;
+                let mutationObserver   = null;
+                let skipFocusReset     = false;
+                let isNavigating       = false; // flag for SPA navigation
+                let nowPlayingMode     = false; // whether we are on a video page
+                let osdExtrasActive    = false; // whether OSD “extras” (plot/clear art) are shown
 
-				function hideOsdExtras() {
-				  osdElementsToHide.forEach(sel =>
-					jellyfin.document.querySelectorAll(sel).forEach(el =>
-					  el.classList.add('osd-hidden')
-					)
-				  );
-				  const btnPause = jellyfin.document.querySelector('button.btnPause');
-				  if (btnPause) btnPause.classList.remove('osdExtrasMode');
+                let focusableElements  = [];    // 2D array: rows of visible, focusable elements
+                let currentRow         = -1;
+                let currentCol         = -1;
 
-				  const clearArtEl = jellyfin.document.getElementById('osdClearArt');
-				  if (clearArtEl) clearArtEl.classList.add('osd-hidden');
-				}
+                const highlightColor   = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
+                const jellyfin         = (() => {
+                    try { return window.parent.document ? window.parent : window; }
+                    catch { return window; }
+                })();
 
-				function showOsdExtras() {
-					osdElementsToHide.forEach(sel =>
-						jellyfin.document.querySelectorAll(sel).forEach(el =>
-							el.classList.remove('osd-hidden')
-						)
-					);
-					const btnPause = jellyfin.document.querySelector('button.btnPause');
-					if (btnPause) {
-						btnPause.classList.add('osdExtrasMode');
-						if (isElementVisible(btnPause)) {
-							btnPause.classList.add('keyboard-nav-highlight');
-							scrollIntoView(btnPause);
-							btnPause.focus();
-							previousElement = btnPause;
-						}
-					}
-
-					const downArrowEvent = new KeyboardEvent('keydown', {
-						key: 'ArrowDown',
-						code: 'ArrowDown',
-						bubbles: true,
-						cancelable: true
-					});
-					jellyfin.document.dispatchEvent(downArrowEvent);
-
-					// ─── Shared: Item ID & API Key ───
-					let itemId = null, apiKey = null;
-					const video = jellyfin.document.querySelector('video');
-					if (video) {
-						const src = video.currentSrc || video.src;
-						const idMatch = src.match(/\/Videos\/([0-9a-f]{32})\//i) || src.match(/mediaSourceId=([0-9a-f]{32})/i);
-						const keyMatch = src.match(/api_key=([0-9a-f]{32})/i);
-						itemId = idMatch && idMatch[1];
-						apiKey = keyMatch && keyMatch[1];
-					}
-
-					// ─── Plot ───
-					const versionEl = jellyfin.document.getElementById('osdMoreText');
-					if (versionEl && itemId) {
-						const url = `/Items/${itemId}${apiKey ? `?api_key=${apiKey}` : ''}`;
-						fetch(url)
-							.then(res => res.json())
-							.then(data => {
-								versionEl.textContent = data.Overview || '(No plot available)';
-							})
-							.catch(err => console.error('Error fetching plot:', err));
-					}
-
-					// ─── ClearArt ───
-					let clearArtEl = jellyfin.document.getElementById('osdClearArt');
-					if (!clearArtEl) {
-						clearArtEl = jellyfin.document.createElement('img');
-						clearArtEl.id = 'osdClearArt';
-						clearArtEl.classList.add('osd-hidden');
-						Object.assign(clearArtEl.style, {
-							position: 'fixed',
-							bottom: '5.7em',
-							right: '3em',
-							maxWidth: '500px',
-							maxHeight: '500px',
-							zIndex: 998,
-							pointerEvents: 'none'
-						});
-						jellyfin.document.body.appendChild(clearArtEl);
-					}
-					if (itemId) {
-						clearArtEl.src = `/Items/${itemId}/Images/Art${apiKey ? `?api_key=${apiKey}` : ''}`;
-						clearArtEl.classList.remove('osd-hidden');
-					}
-				}
-
-
-                const highlightColor = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
+                // Selectors for any element that can receive focus
                 const selectors = `
-                  .btnPlay,
-				  .itemsContainer .cardBox,
-                  .emby-scrollbuttons-button,
-                  .mainDetailButtons .detailButton,
-                  .buttons .paper-icon-button-light,
-                  .playerControlsContainer button,
-                  .playerControlsContainer a,
-                  .emby-tabs-slider button,
-                  .headerRight button,
-                  .headerLeft button,
-                  .featurediframe,
-                  #leftButton,
-                  #rightButton,
-                  .button-link.itemAction.emby-button,
-                  .overview-expand.emby-button,
-				  .listItemBody.actionsheetListItemBody,
-                  button.raised.more.raised-mini.noIcon.emby-button,
-                  .listItem.listItem-largeImage.listItem-withContentWrapper`;
+                    .btnPlay,
+                    .itemsContainer .cardBox,
+                    .emby-scrollbuttons-button,
+                    .mainDetailButtons .detailButton,
+                    .buttons .paper-icon-button-light,
+                    .playerControlsContainer button,
+                    .playerControlsContainer a,
+                    .emby-tabs-slider button,
+                    .headerRight button,
+                    .headerLeft button,
+                    .featurediframe,
+                    #leftButton,
+                    #rightButton,
+                    .button-link.itemAction.emby-button,
+                    .overview-expand.emby-button,
+                    .listItemBody.actionsheetListItemBody,
+                    button.raised.more.raised-mini.noIcon.emby-button,
+                    .listItem.listItem-largeImage.listItem-withContentWrapper
+                `;
 
-                const jellyfin = (() => { try { return window.parent.document ? window.parent : window; } catch { return window; } })();
+                // Which OSD elements to hide in “simple” mode
+                const osdElementsToHide = [
+                    '.btnPip',
+                    '.btnVideoOsdSettings',
+                    '.btnAudio',
+                    '.btnSubtitles',
+                    '.btnUserRating',
+                    '.btnNextTrack',
+                    '.btnNextChapter',
+                    '.btnFastForward',
+                    '.btnRewind',
+                    '.btnPreviousChapter',
+                    '.btnPreviousTrack',
+                    '.osdTimeText',
+                    '.osdRatingsText',
+                    '.btnFullscreen',
+                    '.volumeButtons',
+                    '#osdMoreText'
+                ];
 
-                // Detect Now Playing page
-                function checkNowPlayingMode() {
-					const url = window.top.location.href;
-					const head = jellyfin.document.head;
-					// Remove existing style
-					const existingStyle = jellyfin.document.getElementById('now-playing-style');
-					if (existingStyle) {
-						existingStyle.remove();
-					}
+                // ───────────────────────────────────────────────────────────────────────────────
+                // HELPER FUNCTIONS (STYLE & UTILITIES)
+                // ───────────────────────────────────────────────────────────────────────────────
 
-					if (url.includes('#/video')) {
-						// Inject overlay style
-						const style = jellyfin.document.createElement('style');
-						style.id = 'now-playing-style';
-						style.textContent = `
-						#osdMoreText {
-						    position: fixed;
-							bottom: 6em;
-							left: 12px;
-							font-family: 'Inter', sans-serif;
-							font-weight: 200;
-							font-size: 16pt;
-							line-height: 1.3;
-							color: #F0F0F0;
-							background-color: rgba(0, 0, 0, 0.7);
-							padding: 8px 12px;
-							border-radius: 6px;
-							max-width: 65vw;
-							white-space: pre-wrap;
-							word-wrap: break-word;
-							text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-							box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-							pointer-events: none;
-							z-index: 9999;
-						  }
-						.osd-hidden {
-							display: none !important;
-						}
-						.headerLeft {
-							margin-right: 1em !important; 
-							justify-content: flex-end !important;
-						}
-						
-					`;
-						head.appendChild(style);
-
-						//Wait for video to load efore inj
-						function injectVersionText() {
-							const body = jellyfin.document.body;
-							if (!body) {
-								// Retry after a short delay if body isn't available yet
-								setTimeout(injectVersionText, 100);
-								return;
-							}
-							// Plot
-							if (!jellyfin.document.getElementById('osdMoreText')) {
-							  const el = jellyfin.document.createElement('div');
-							  el.id = 'osdMoreText';
-							  el.classList.add('osd-hidden');
-							  jellyfin.document.body.appendChild(el);
-							}
-						}
-
-						injectVersionText();
-
-						nowPlayingMode = true;
-						if (!osdExtrasActive) hideOsdExtras();
-
-						const osdBottom = jellyfin.document.querySelector('.videoOsdBottom');
-						if (osdBottom) {
-							const observer = new MutationObserver(() => {
-								const hidden = osdBottom.classList.contains('videoOsdBottom-hidden') ||
-											   osdBottom.classList.contains('hide');
-								if (hidden && osdExtrasActive) {
-									hideOsdExtras();
-									osdExtrasActive = false;
-								}
-							});
-							observer.observe(osdBottom, { attributes: true, attributeFilter: ['class'] });
-						}
-
-						// ─── Inject Parent-Show Logo Once ───────────────────────────────────────────
-						(function() {
-							
-							if (jellyfin.document.getElementById('parent-show-logo')) return;
-
-							const guidRe      = /\b[0-9a-f]{32}\b/gi;
-							const seen        = new Set();
-
-							// 1. Gather the GUID in the Jellyfin DOM
-							jellyfin.document.querySelectorAll('*').forEach(el =>
-								Array.from(el.attributes).forEach(attr => {
-									let m;
-									guidRe.lastIndex = 0;
-									while ((m = guidRe.exec(attr.value)) !== null) {
-										seen.add(m[0]);
-									}
-								})
-							);
-
-							const ids         = [...seen];
-							const maxAttempts = 3;
-							const logoStyles  = {
-								position:  'absolute',
-								top:       '10px',
-								left:      '20px',
-								maxWidth:  '400px',
-								maxHeight: '400px',
-								transformOrigin:'top left',
-								zIndex:    999
-							};
-
-							function tryNext(idx) {
-								if (idx >= ids.length || idx >= maxAttempts) return;
-								const id = ids[idx];
-								fetch(`/Items/${id}/Images/Logo`, {
-									method:      'HEAD',
-									credentials: 'same-origin'
-								})
-								.then(res => {
-									if (res.ok) {
-										const img = jellyfin.document.createElement('img');
-										img.id = 'parent-show-logo';
-										img.src = `/Items/${id}/Images/Logo`;
-										img.alt = 'Jellyfin Logo';
-										Object.assign(img.style, logoStyles);
-										const headerTop = jellyfin.document.querySelector('.osdHeader .headerTop');
-											if (headerTop) {
-												img.style.position = 'absolute'; // adjust positioning since it's now relative to .headerTop
-												headerTop.appendChild(img);
-											}
-										console.log('Logo injector: logo loaded for', id);
-									} else {
-										tryNext(idx + 1);
-									}
-								})
-								.catch(() => {
-									tryNext(idx + 1);
-								});
-							}
-
-							tryNext(0);
-						})();
-					} else {
-						// Remove injected logo when leaving video page
-						const existingLogo = jellyfin.document.getElementById('parent-show-logo');
-						if (existingLogo) {
-							existingLogo.remove();
-						}
-
-						// Remove plot
-						const plotEl = jellyfin.document.getElementById('osdMoreText');
-						if (plotEl) {
-							plotEl.remove();
-						}
-
-						// Remove clearart
-						const clearArtEl = jellyfin.document.getElementById('osdClearArt');
-						if (clearArtEl) {
-							clearArtEl.remove();
-						}
-
-						nowPlayingMode = false;
-					}
-				}
-
-
+                // Convert hex color to rgba
                 function hexToRgba(hex, alpha) {
                     hex = hex.replace('#', '');
                     if (hex.length === 3) hex = hex.split('').map(ch => ch + ch).join('');
@@ -333,412 +101,677 @@
                     const b = bigint & 255;
                     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
                 }
-				
-				function describe(el) {
-				  const parts = [el.tagName.toLowerCase()];
-				  if (el.id)       parts.push(`#${el.id}`);
-				  if (el.classList.length) parts.push(`.${[...el.classList].join('.')}`);
-				  const label = el.getAttribute('aria-label') || el.title;
-				  if (label)       parts.push(`("${label}")`);
-				  return parts.join('');
-				}
-				
-				// --- state reset on location change ---
-				function handleLocationChange() {
-					// 1) remove any existing highlight
-					if (previousElement) {
-						previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-					}
 
-					// 2) reset pointers & arrays
-					focusableElements = [];
-					currentRow = -1;
-					currentCol = -1;
-					previousElement = null;
+                // Return a short text description of an element (for debugging)
+                function describe(el) {
+                    const parts = [el.tagName.toLowerCase()];
+                    if (el.id) parts.push(`#${el.id}`);
+                    if (el.classList.length) parts.push(`.${[...el.classList].join('.')}`);
+                    const label = el.getAttribute('aria-label') || el.title;
+                    if (label) parts.push(`("${label}")`);
+                    return parts.join('');
+                }
 
-					// 3) rebuild and re-initialize focus
-					updateFocusableElements();
-					initializeFocus();
-				}
-
-				// 4) listen for SPA nav events
-				window.addEventListener('hashchange', handleLocationChange);
-				window.addEventListener('popstate', handleLocationChange);
-
-				// —if Jellyfin uses history.pushState directly, you can also patch it:
-				const _pushState = history.pushState;
-				history.pushState = function (...args) {
-					_pushState.apply(this, args);
-					handleLocationChange();
-				};
-
-                const addStyles = (doc, isIframe = false) => {
-                    if (!doc.getElementById('tv-nav-styles')) {
-                        const style = doc.createElement('style');
-                        style.id = 'tv-nav-styles';
-                        const boxShadowColor = hexToRgba(highlightColor, 0.5);
-                        style.textContent = `
-                            :root {
-                                --highlight-color: ${highlightColor};
-                                --md-hover-primary: rgba(103, 80, 164, 0.12);
-                                --md-hover-on-surface: rgba(28, 27, 31, 0.08);
-                                --md-sys-color-primary: #6750A4;
-                                --md-sys-color-on-primary: #FFFFFF;
-                                --md-sys-color-surface: #FFFBFE;
-                                --md-sys-color-surface-container-low: #F7F2FA;
-                                --md-sys-color-surface-container: #E8DEF8;
-                                --md-sys-color-surface-container-high: #D0BCFF;
-                                --md-sys-color-outline: #79747E;
-                                --md-sys-color-secondary: #625B71;
-                                --md-sys-color-on-surface: #1C1B1F;
-                                --md-sys-color-surface-variant: #E7E0EC;
-                                --border-color: #79747E;
-                            }
-                            .headerSyncButton,
-                            .headerCastButton,
-                            .headerUserButton,
-                            .headerBackButton {
-                                display: none !important;
-                            }
-							.pageTitleWithDefaultLogo {
-								background-image: url(/assets/img/icon-transparent.png) !important;
-							}
-							.sliderContainer {
-							  position: relative !important;
-							  left: 1.8em !important;
-							  max-width: 88% !important;
-							}
-
-							.osdTextContainer.endTimeText.osdDurationText {
-							  position: relative !important;
-							  left: 1em !important;
-							}
-
-							button.btnPause,
-							button.btnPause.keyboard-nav-highlight {
-
-							  bottom: 2.6em !important;
-							  left: 5em !important;
-							  transform: scale(1.6) !important;
-							  border-radius: 6px !important;
-							  background-color: var(--md-sys-color-primary) !important;
-                              color: var(--md-sys-color-on-primary) !important;
-							  z-index: 999;
-							}
-							
-							button.btnPause.osdExtrasMode {
-								bottom: auto !important;
-								left: auto !important;
-								transform: none !important;
-								border-radius: 0 !important;
-								background-color: transparent !important;
-								color: inherit !important;
-							}
-							
-                            .keyboard-nav-highlight {
-                                position: relative;
-                                transition: transform 0.3s ease, background-color 0.3s ease;
-                                // box-shadow: ${isIframe ? 'none' : `0 0 10px ${boxShadowColor}`} ;
-                                // animation: ${isIframe ? 'none' : 'pulse-glow 2s infinite'};
-                                z-index: 1;
-                            }
-                            @keyframes pulse-glow {
-                                0%   { box-shadow: 0 0 10px ${boxShadowColor}; }
-                                50%  { box-shadow: 0 0 20px ${boxShadowColor}; }
-                                100% { box-shadow: 0 0 10px ${boxShadowColor}; }
-                            }
-                            .featurediframe .keyboard-nav-highlight {
-                                transform: none !important;
-                                outline: 2px solid var(--highlight-color);
-                                box-shadow: none !important;
-                                animation: none !important;
-                            }
-                            .listItem.keyboard-nav-highlight {
-                                background-color: var(--md-hover-primary) !important;
-                            }
-                            #navButtons button.keyboard-nav-highlight {
-                                background-color: var(--md-sys-color-primary) !important;
-                                color: var(--md-sys-color-on-primary) !important;
-                                transition: background-color 0.2s ease, transform 0.2s ease;
-                            }
-                            #navButtons button.keyboard-nav-highlight .material-icons {
-                                color: var(--md-sys-color-on-primary) !important;
-                            }
-                            .cardBox.keyboard-nav-highlight {                                
-								box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
-								background-color: var(--md-sys-color-primary);
-								transform: scale(1.05); /* Slight growth */											
-                            }
-                            .actionSheetMenuItem.keyboard-nav-highlight,
-                            .navMenuOption.keyboard-nav-highlight {
-                                background-color: var(--md-hover-primary) !important;
-                            }
-                            .cardOverlayFab-primary.keyboard-nav-highlight {
-                                background: linear-gradient(rgba(0, 164, 220, 0.1), rgba(0, 164, 220, 0.1)) padding-box,
-                                            var(--border-color) border-box !important;
-                            }
-                            .paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
-                                color: var(--md-sys-color-surface) !important;
-                                background-color: var(--md-sys-color-primary) !important;
-                            }
-                            .formDialogHeader .btnCancel.keyboard-nav-highlight {
-                                background-color: var(--md-hover-primary) !important;
-                            }
-                            .formDialogFooterItem.button-submit.keyboard-nav-highlight {
-                                background-color: #5f429a !important;
-                                box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.3) !important;
-                            }
-                            .mainDetailButtons .detailButton.keyboard-nav-highlight {
-                                background-color: var(--md-sys-color-surface-container) !important;
-                                color: var(--md-sys-color-primary) !important;
-                                box-shadow: none !important;
-                                background-image: none !important;
-                                backdrop-filter: none !important;
-                            }
-                            .mainDetailButtons > .btnMoreCommands.detailButton.keyboard-nav-highlight {
-                                border-top-right-radius: 999px !important;
-                                border-bottom-right-radius: 999px !important;
-                            }
-                            .mainDetailButtons > .btnReplay.detailButton.keyboard-nav-highlight {
-                                border-top-left-radius: 999px !important;
-                                border-bottom-left-radius: 999px !important;
-                            }
-                            a.button-link.itemAction.emby-button.keyboard-nav-highlight {
-                                background-color: var(--md-sys-color-surface-container) !important;
-                                color: var(--md-sys-color-on-surface) !important;
-                                border-color: var(--md-sys-color-outline) !important;
-                            }
-                            a.overview-expand.emby-button.keyboard-nav-highlight {
-                                background-color: var(--md-sys-color-surface-container) !important;
-                                color: var(--md-sys-color-on-surface) !important;
-                            }
-                            button.raised.more.raised-mini.noIcon.emby-button.keyboard-nav-highlight {
-                                background-color: var(--md-sys-color-surface-container) !important;
-                                color: var(--md-sys-color-on-surface) !important;
-                                box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.25) !important;
-                            }
-							.listItemBody.actionsheetListItemBody.keyboard-nav-highlight {
-								background-color: var(--md-sys-color-surface-container) !important;
-								transition: background-color 0.2s ease-in-out;
-							}
-                            .btnPlay.detailButton.keyboard-nav-highlight {
-                                transform: translateY(-0.7em) scale(1.2) !important;
-								color: var(--md-sys-color-surface) !important;
-								background-color: var(--md-sys-color-primary) !important;
-                                box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
-                                z-index: 3 !important;
-                            }
-                        `;
-                        doc.head.appendChild(style);
-                    }
-                };
-
-				// Used when workign with Spotlight Mod featured iframe
-                const injectIframeHoverStyles = doc => {
-                    if (!doc.getElementById('iframe-hover-styles')) {
-                        const style = doc.createElement('style');
-                        style.id = 'iframe-hover-styles';
-                        style.textContent = `
-                            .slide.hover .logo {
-								transform: translateY(-50%) translateX(-50%) scale(1.35) !important;
-								opacity: 0.1 !important;
-							}
-                            .slide.hover .lorem-ipsum { opacity: 1; }
-                        `;
-                        doc.head.appendChild(style);
-                    }
-                };
-
-                const toggleHover = (doc, add = true) => {
-                    const slide = doc.querySelector('.slide');
-                    if (slide) slide.classList.toggle('hover', add);
-                };
-
+                // Determine if an element is visible (not display:none, opacity:0, or hidden by an ancestor)
                 function isElementVisible(el) {
-				  // 3) computed-style hiding on the element itself
-				  const style = window.getComputedStyle(el);
-				  if (
-					style.display === 'none' ||
-					style.visibility !== 'visible' ||
-					parseFloat(style.opacity) === 0
-				  ) {
-					return false;
-				  }
-
-				  // 4) computed-style hiding on any ancestor
-				  let parent = el.parentElement;
-				  while (parent) {
-					const pStyle = window.getComputedStyle(parent);
-					if (
-					  pStyle.display === 'none' ||
-					  pStyle.visibility !== 'visible' ||
-					  parseFloat(pStyle.opacity) === 0
-					) {
-					  return false;
-					}
-					parent = parent.parentElement;
-				  }
-
-				  return true;
-				}
-
-                const updateFocusableElements = () => {
-                    checkNowPlayingMode();
-                    const elements = Array.from(jellyfin.document.querySelectorAll(selectors));
-                    let processed = [];
-                    elements.forEach(el => {
-                        if (el.classList.contains('featurediframe')) {
-                            const iframeDoc = el.contentDocument || el.contentWindow.document;
-                            if (iframeDoc) {
-                                addStyles(iframeDoc, true);
-                                injectIframeHoverStyles(iframeDoc);
-                                Array.from(iframeDoc.querySelectorAll('[tabindex="0"]')).filter(isElementVisible).forEach(innerEl => {
-                                    const rect = el.getBoundingClientRect(),
-                                        innerRect = innerEl.getBoundingClientRect();
-                                    processed.push({ element: innerEl, top: rect.top + innerRect.top, left: rect.left + innerRect.left });
-                                });
-                            }
-                        } else if (isElementVisible(el)) {
-                            const rect = el.getBoundingClientRect();
-                            processed.push({ element: el, top: rect.top, left: rect.left });
+                    const style = window.getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility !== 'visible' || parseFloat(style.opacity) === 0) {
+                        return false;
+                    }
+                    let parent = el.parentElement;
+                    while (parent) {
+                        const pStyle = window.getComputedStyle(parent);
+                        if (pStyle.display === 'none' || pStyle.visibility !== 'visible' || parseFloat(pStyle.opacity) === 0) {
+                            return false;
                         }
-                    });
-                    processed.sort((a, b) => a.top !== b.top ? a.top - b.top : a.left - b.left);
-                    let grid = [], row = [], lastTop = -1, threshold = 50;
-                    processed.forEach(item => {
-                        if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
-                            if (row.length) grid.push(row);
-                            row = [item.element];
-                            lastTop = item.top;
-                        } else { row.push(item.element); }
-                    });
-                    if (row.length) grid.push(row);
-                    focusableElements = grid;
-                };
+                        parent = parent.parentElement;
+                    }
+                    return true;
+                }
 
-                const scrollIntoView = el => {
+                // Smoothly scroll an element into view, handling carousels if needed
+                function scrollIntoView(el) {
                     if (!el) return;
                     requestAnimationFrame(() => {
                         el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
                         const carousel = el.closest('.emby-scroller');
                         if (carousel) {
                             const cr = carousel.getBoundingClientRect(), er = el.getBoundingClientRect(), buffer = 100;
-                            if (er.left < cr.left + buffer) carousel.scrollBy({ left: er.left - cr.left - buffer, behavior: 'smooth' });
-                            if (er.right > cr.right - buffer) carousel.scrollBy({ left: er.right - cr.right + buffer, behavior: 'smooth' });
+                            if (er.left < cr.left + buffer) {
+                                carousel.scrollBy({ left: er.left - cr.left - buffer, behavior: 'smooth' });
+                            }
+                            if (er.right > cr.right - buffer) {
+                                carousel.scrollBy({ left: er.right - cr.right + buffer, behavior: 'smooth' });
+                            }
                         }
                     });
-                };
+                }
 
-                const moveFocus = (dr, dc) => {
+                // ───────────────────────────────────────────────────────────────────────────────
+                // STYLE INJECTION (TV MODE STYLES)
+                // ───────────────────────────────────────────────────────────────────────────────
+
+                function addStyles(doc, isIframe = false) {
+                    if (doc.getElementById('tv-nav-styles')) return;
+
+                    const style = doc.createElement('style');
+                    style.id = 'tv-nav-styles';
+
+                    // Box-shadow for focus in main document vs. iframe
+                    const boxShadowColor = hexToRgba(highlightColor, 0.5);
+
+                    style.textContent = `
+                        :root {
+                            --highlight-color: ${highlightColor};
+                            --md-hover-primary: rgba(103, 80, 164, 0.12);
+                            --md-hover-on-surface: rgba(28, 27, 31, 0.08);
+                            --md-sys-color-primary: #6750A4;
+                            --md-sys-color-on-primary: #FFFFFF;
+                            --md-sys-color-surface: #FFFBFE;
+                            --md-sys-color-surface-container-low: #F7F2FA;
+                            --md-sys-color-surface-container: #E8DEF8;
+                            --md-sys-color-surface-container-high: #D0BCFF;
+                            --md-sys-color-outline: #79747E;
+                            --md-sys-color-secondary: #625B71;
+                            --md-sys-color-on-surface: #1C1B1F;
+                            --md-sys-color-surface-variant: #E7E0EC;
+                            --border-color: #79747E;
+                        }
+                        /* Hide header buttons not needed in TV mode */
+                        .headerSyncButton,
+                        .headerCastButton,
+                        .headerUserButton,
+                        .headerBackButton {
+                            display: none !important;
+                        }
+                        /* Override the default Jellyfin page title asset */
+                        .pageTitleWithDefaultLogo {
+                            background-image: url(/assets/img/icon-transparent.png) !important;
+                        }
+                        /* Reposition the video slider in OSD */
+                        .sliderContainer {
+                            position: relative !important;
+                            left: 1.8em !important;
+                            max-width: 88% !important;
+                        }
+                        /* Reposition the time text in OSD */
+                        .osdTextContainer.endTimeText.osdDurationText {
+                            position: relative !important;
+                            left: 1em !important;
+                        }
+
+                        /* Style for Pause button in simple OSD mode */
+                        button.btnPause,
+                        button.btnPause.keyboard-nav-highlight {
+                            bottom: 2.6em !important;
+                            left: 5em !important;
+                            transform: scale(1.6) !important;
+                            border-radius: 6px !important;
+                            background-color: var(--md-sys-color-primary) !important;
+                            color: var(--md-sys-color-on-primary) !important;
+                            z-index: 999;
+                        }
+                        /* Override Pause button style when in OSD “extras” mode */
+                        button.btnPause.osdExtrasMode {
+                            bottom: auto !important;
+                            left: auto !important;
+                            transform: none !important;
+                            border-radius: 0 !important;
+                            background-color: transparent !important;
+                            color: inherit !important;
+                        }
+
+                        /* Highlight animation */
+                        .keyboard-nav-highlight {
+                            position: relative;
+                            transition: transform 0.3s ease, background-color 0.3s ease;
+                            ${isIframe ? '' : `box-shadow: 0 0 10px ${boxShadowColor}`};
+                            ${isIframe ? '' : `animation: pulse-glow 2s infinite`};
+                            z-index: 1;
+                        }
+                        @keyframes pulse-glow {
+                            0%   { box-shadow: 0 0 10px ${boxShadowColor}; }
+                            50%  { box-shadow: 0 0 20px ${boxShadowColor}; }
+                            100% { box-shadow: 0 0 10px ${boxShadowColor}; }
+                        }
+                        /* In an iframe, disable the box-shadow */
+                        .featurediframe .keyboard-nav-highlight {
+                            transform: none !important;
+                            outline: 2px solid var(--highlight-color);
+                            box-shadow: none !important;
+                            animation: none !important;
+                        }
+                        /* CardBox highlight style */
+                        .cardBox.keyboard-nav-highlight {
+                            box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
+                            background-color: var(--md-sys-color-primary);
+                            transform: scale(1.05);
+                        }
+                        /* Other element-specific highlight overrides */
+                        .listItem.keyboard-nav-highlight {
+                            background-color: var(--md-hover-primary) !important;
+                        }
+                        #navButtons button.keyboard-nav-highlight {
+                            background-color: var(--md-sys-color-primary) !important;
+                            color: var(--md-sys-color-on-primary) !important;
+                            transition: background-color 0.2s ease, transform 0.2s ease;
+                        }
+                        #navButtons button.keyboard-nav-highlight .material-icons {
+                            color: var(--md-sys-color-on-primary) !important;
+                        }
+                        .actionSheetMenuItem.keyboard-nav-highlight,
+                        .navMenuOption.keyboard-nav-highlight {
+                            background-color: var(--md-hover-primary) !important;
+                        }
+                        .cardOverlayFab-primary.keyboard-nav-highlight {
+                            background: linear-gradient(rgba(0, 164, 220, 0.1), rgba(0, 164, 220, 0.1)) padding-box,
+                                        var(--border-color) border-box !important;
+                        }
+                        .paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
+                            color: var(--md-sys-color-surface) !important;
+                            background-color: var(--md-sys-color-primary) !important;
+                        }
+                        .formDialogHeader .btnCancel.keyboard-nav-highlight {
+                            background-color: var(--md-hover-primary) !important;
+                        }
+                        .formDialogFooterItem.button-submit.keyboard-nav-highlight {
+                            background-color: #5f429a !important;
+                            box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.3) !important;
+                        }
+                        .mainDetailButtons .detailButton.keyboard-nav-highlight {
+                            background-color: var(--md-sys-color-surface-container) !important;
+                            color: var(--md-sys-color-primary) !important;
+                            box-shadow: none !important;
+                            background-image: none !important;
+                            backdrop-filter: none !important;
+                        }
+                        .mainDetailButtons > .btnMoreCommands.detailButton.keyboard-nav-highlight {
+                            border-top-right-radius: 999px !important;
+                            border-bottom-right-radius: 999px !important;
+                        }
+                        .mainDetailButtons > .btnReplay.detailButton.keyboard-nav-highlight {
+                            border-top-left-radius: 999px !important;
+                            border-bottom-left-radius: 999px !important;
+                        }
+                        a.button-link.itemAction.emby-button.keyboard-nav-highlight {
+                            background-color: var(--md-sys-color-surface-container) !important;
+                            color: var(--md-sys-color-on-surface) !important;
+                            border-color: var(--md-sys-color-outline) !important;
+                        }
+                        a.overview-expand.emby-button.keyboard-nav-highlight {
+                            background-color: var(--md-sys-color-surface-container) !important;
+                            color: var(--md-sys-color-on-surface) !important;
+                        }
+                        button.raised.more.raised-mini.noIcon.emby-button.keyboard-nav-highlight {
+                            background-color: var(--md-sys-color-surface-container) !important;
+                            color: var(--md-sys-color-on-surface) !important;
+                            box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.25) !important;
+                        }
+                        .listItemBody.actionsheetListItemBody.keyboard-nav-highlight {
+                            background-color: var(--md-sys-color-surface-container) !important;
+                            transition: background-color 0.2s ease-in-out;
+                        }
+                        .btnPlay.detailButton.keyboard-nav-highlight {
+                            transform: translateY(-0.7em) scale(1.2) !important;
+                            color: var(--md-sys-color-surface) !important;
+                            background-color: var(--md-sys-color-primary) !important;
+                            box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
+                            z-index: 3 !important;
+                        }
+                    `;
+                    doc.head.appendChild(style);
+                }
+
+                // Inject hover styles for Spotlight Mod iframes
+                function injectIframeHoverStyles(doc) {
+                    if (doc.getElementById('iframe-hover-styles')) return;
+                    const style = doc.createElement('style');
+                    style.id = 'iframe-hover-styles';
+                    style.textContent = `
+                        .slide.hover .logo {
+                            transform: translateY(-50%) translateX(-50%) scale(1.35) !important;
+                            opacity: 0.1 !important;
+                        }
+                        .slide.hover .lorem-ipsum { opacity: 1; }
+                    `;
+                    doc.head.appendChild(style);
+                }
+
+                // Toggle “hover” class inside a featured iframe
+                function toggleHover(doc, add = true) {
+                    const slide = doc.querySelector('.slide');
+                    if (slide) slide.classList.toggle('hover', add);
+                }
+
+                // ───────────────────────────────────────────────────────────────────────────────
+                // OSD HANDLING (SIMPLE vs. EXTRAS MODE)
+                // ───────────────────────────────────────────────────────────────────────────────
+
+                function hideOsdExtras() {
+                    // Hide all “extra” elements
+                    osdElementsToHide.forEach(sel =>
+                        jellyfin.document.querySelectorAll(sel).forEach(el =>
+                            el.classList.add('osd-hidden')
+                        )
+                    );
+                    // Remove special Pause styling
+                    const btnPause = jellyfin.document.querySelector('button.btnPause');
+                    if (btnPause) btnPause.classList.remove('osdExtrasMode');
+
+                    // Hide ClearArt if present
+                    const clearArtEl = jellyfin.document.getElementById('osdClearArt');
+                    if (clearArtEl) clearArtEl.classList.add('osd-hidden');
+                }
+
+                function showOsdExtras() {
+                    // Reveal all OSD elements
+                    osdElementsToHide.forEach(sel =>
+                        jellyfin.document.querySelectorAll(sel).forEach(el =>
+                            el.classList.remove('osd-hidden')
+                        )
+                    );
+
+                    // Mark Pause button as “extras” mode and focus it
+                    const btnPause = jellyfin.document.querySelector('button.btnPause');
+                    if (btnPause) {
+                        btnPause.classList.add('osdExtrasMode');
+                        if (isElementVisible(btnPause)) {
+                            btnPause.classList.add('keyboard-nav-highlight');
+                            scrollIntoView(btnPause);
+                            btnPause.focus();
+                            previousElement = btnPause;
+                        }
+                    }
+
+                    // Simulate pressing “ArrowDown” once to move virtual focus downward
+                    const downArrowEvent = new KeyboardEvent('keydown', {
+                        key: 'ArrowDown',
+                        code: 'ArrowDown',
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    jellyfin.document.dispatchEvent(downArrowEvent);
+
+                    // ─── Fetch current video’s Item ID & API Key ─────────────────────────────
+                    let itemId = null, apiKey = null;
+                    const video = jellyfin.document.querySelector('video');
+                    if (video) {
+                        const src = video.currentSrc || video.src;
+                        const idMatch  = src.match(/\/Videos\/([0-9a-f]{32})\//i)
+                                      || src.match(/mediaSourceId=([0-9a-f]{32})/i);
+                        const keyMatch = src.match(/api_key=([0-9a-f]{32})/i);
+                        itemId = idMatch && idMatch[1];
+                        apiKey = keyMatch && keyMatch[1];
+                    }
+
+                    // ─── Plot: insert overview text into #osdMoreText ─────────────────────────
+                    const versionEl = jellyfin.document.getElementById('osdMoreText');
+                    if (versionEl && itemId) {
+                        const url = `/Items/${itemId}${apiKey ? `?api_key=${apiKey}` : ''}`;
+                        fetch(url)
+                            .then(res => res.json())
+                            .then(data => {
+                                versionEl.textContent = data.Overview || '(No plot available)';
+                            })
+                            .catch(err => console.error('Error fetching plot:', err));
+                    }
+
+                    // ─── ClearArt: create or update an <img> for clearart ─────────────────────
+                    let clearArtEl = jellyfin.document.getElementById('osdClearArt');
+                    if (!clearArtEl) {
+                        clearArtEl = jellyfin.document.createElement('img');
+                        clearArtEl.id = 'osdClearArt';
+                        clearArtEl.classList.add('osd-hidden');
+                        Object.assign(clearArtEl.style, {
+                            position: 'fixed',
+                            bottom: '5.7em',
+                            right: '3em',
+                            maxWidth: '500px',
+                            maxHeight: '500px',
+                            zIndex: 998,
+                            pointerEvents: 'none'
+                        });
+                        jellyfin.document.body.appendChild(clearArtEl);
+                    }
+                    if (itemId) {
+                        clearArtEl.src = `/Items/${itemId}/Images/Art${apiKey ? `?api_key=${apiKey}` : ''}`;
+                        clearArtEl.classList.remove('osd-hidden');
+                    }
+                }
+
+                // ───────────────────────────────────────────────────────────────────────────────
+                // NOW-PLAYING PAGE DETECTION & LOGO INJECTION
+                // ───────────────────────────────────────────────────────────────────────────────
+
+                function checkNowPlayingMode() {
+                    const url  = window.top.location.href;
+                    const head = jellyfin.document.head;
+
+                    // Remove any previously injected “now-playing” style
+                    const existingStyle = jellyfin.document.getElementById('now-playing-style');
+                    if (existingStyle) existingStyle.remove();
+
+                    if (url.includes('#/video')) {
+                        // ─── Inject OSD overlay styles ───────────────────────────────────────
+                        const style = jellyfin.document.createElement('style');
+                        style.id = 'now-playing-style';
+                        style.textContent = `
+                            #osdMoreText {
+                                position: fixed;
+                                bottom: 6em;
+                                left: 12px;
+                                font-family: 'Inter', sans-serif;
+                                font-weight: 200;
+                                font-size: 16pt;
+                                line-height: 1.3;
+                                color: #F0F0F0;
+                                background-color: rgba(0, 0, 0, 0.7);
+                                padding: 8px 12px;
+                                border-radius: 6px;
+                                max-width: 65vw;
+                                white-space: pre-wrap;
+                                word-wrap: break-word;
+                                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+                                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+                                pointer-events: none;
+                                z-index: 9999;
+                            }
+                            .osd-hidden { display: none !important; }
+                            .headerLeft {
+                                margin-right: 1em !important;
+                                justify-content: flex-end !important;
+                            }
+                        `;
+                        head.appendChild(style);
+
+                        // Create the “osdMoreText” container if it doesn’t exist
+                        (function injectVersionText() {
+                            const body = jellyfin.document.body;
+                            if (!body) {
+                                setTimeout(injectVersionText, 100);
+                                return;
+                            }
+                            if (!jellyfin.document.getElementById('osdMoreText')) {
+                                const el = jellyfin.document.createElement('div');
+                                el.id = 'osdMoreText';
+                                el.classList.add('osd-hidden');
+                                jellyfin.document.body.appendChild(el);
+                            }
+                        })();
+
+                        nowPlayingMode = true;
+                        if (!osdExtrasActive) hideOsdExtras();
+
+                        // Observe the bottom OSD container to hide extras when OSD disappears
+                        const osdBottom = jellyfin.document.querySelector('.videoOsdBottom');
+                        if (osdBottom) {
+                            const observer = new MutationObserver(() => {
+                                const hidden = osdBottom.classList.contains('videoOsdBottom-hidden')
+                                            || osdBottom.classList.contains('hide');
+                                if (hidden && osdExtrasActive) {
+                                    hideOsdExtras();
+                                    osdExtrasActive = false;
+                                }
+                            });
+                            observer.observe(osdBottom, { attributes: true, attributeFilter: ['class'] });
+                        }
+
+                        // ─── Inject “parent-show-logo” once per video page ────────────────
+                        (function() {
+                            if (jellyfin.document.getElementById('parent-show-logo')) return;
+
+                            const guidRe      = /\b[0-9a-f]{32}\b/gi;
+                            const seen        = new Set();
+                            jellyfin.document.querySelectorAll('*').forEach(el =>
+                                Array.from(el.attributes).forEach(attr => {
+                                    let m;
+                                    guidRe.lastIndex = 0;
+                                    while ((m = guidRe.exec(attr.value)) !== null) {
+                                        seen.add(m[0]);
+                                    }
+                                })
+                            );
+                            const ids         = [...seen];
+                            const maxAttempts = 3;
+                            const logoStyles  = {
+                                position:       'absolute',
+                                top:            '10px',
+                                left:           '20px',
+                                maxWidth:       '400px',
+                                maxHeight:      '400px',
+                                transformOrigin:'top left',
+                                zIndex:         999
+                            };
+
+                            function tryNext(idx) {
+                                if (idx >= ids.length || idx >= maxAttempts) return;
+                                const id = ids[idx];
+                                fetch(`/Items/${id}/Images/Logo`, {
+                                    method:      'HEAD',
+                                    credentials: 'same-origin'
+                                })
+                                .then(res => {
+                                    if (res.ok) {
+                                        const img = jellyfin.document.createElement('img');
+                                        img.id = 'parent-show-logo';
+                                        img.src = `/Items/${id}/Images/Logo`;
+                                        img.alt = 'Jellyfin Logo';
+                                        Object.assign(img.style, logoStyles);
+                                        const headerTop = jellyfin.document.querySelector('.osdHeader .headerTop');
+                                        if (headerTop) {
+                                            img.style.position = 'absolute';
+                                            headerTop.appendChild(img);
+                                        }
+                                        console.log('Logo injector: logo loaded for', id);
+                                    } else {
+                                        tryNext(idx + 1);
+                                    }
+                                })
+                                .catch(() => {
+                                    tryNext(idx + 1);
+                                });
+                            }
+                            tryNext(0);
+                        })();
+                    }
+                    else {
+                        // Leaving video page: remove logo, plot, and clearart
+                        const existingLogo   = jellyfin.document.getElementById('parent-show-logo');
+                        const plotEl         = jellyfin.document.getElementById('osdMoreText');
+                        const clearArtEl     = jellyfin.document.getElementById('osdClearArt');
+                        if (existingLogo) existingLogo.remove();
+                        if (plotEl) plotEl.remove();
+                        if (clearArtEl) clearArtEl.remove();
+
+                        nowPlayingMode = false;
+                    }
+                }
+
+                // ───────────────────────────────────────────────────────────────────────────────
+                // FOCUSABLE ELEMENTS GRID & VIRTUAL FOCUS MOVEMENT
+                // ───────────────────────────────────────────────────────────────────────────────
+
+                function updateFocusableElements() {
+                    checkNowPlayingMode();
+
+                    const elements = Array.from(jellyfin.document.querySelectorAll(selectors));
+                    let processed = [];
+
+                    elements.forEach(el => {
+                        if (el.classList.contains('featurediframe')) {
+                            const iframeDoc = el.contentDocument || el.contentWindow.document;
+                            if (iframeDoc) {
+                                addStyles(iframeDoc, true);
+                                injectIframeHoverStyles(iframeDoc);
+                                Array.from(iframeDoc.querySelectorAll('[tabindex="0"]'))
+                                    .filter(isElementVisible)
+                                    .forEach(innerEl => {
+                                        const rect = el.getBoundingClientRect();
+                                        const innerRect = innerEl.getBoundingClientRect();
+                                        processed.push({
+                                            element: innerEl,
+                                            top:     rect.top + innerRect.top,
+                                            left:    rect.left + innerRect.left
+                                        });
+                                    });
+                            }
+                        }
+                        else if (isElementVisible(el)) {
+                            const rect = el.getBoundingClientRect();
+                            processed.push({ element: el, top: rect.top, left: rect.left });
+                        }
+                    });
+
+                    // Sort by row (top) then column (left)
+                    processed.sort((a, b) => {
+                        if (a.top !== b.top) return a.top - b.top;
+                        return a.left - b.left;
+                    });
+
+                    // Group into rows with a threshold
+                    const grid = [], threshold = 50;
+                    let row = [], lastTop = -1;
+                    processed.forEach(item => {
+                        if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
+                            if (row.length) grid.push(row);
+                            row = [item.element];
+                            lastTop = item.top;
+                        } else {
+                            row.push(item.element);
+                        }
+                    });
+                    if (row.length) grid.push(row);
+
+                    focusableElements = grid;
+                }
+
+                function moveFocus(dr, dc) {
                     if (!focusableElements.length) return;
                     let nr = currentRow + dr, nc = currentCol + dc;
                     if (nr < 0 || nr >= focusableElements.length) return;
                     if (nc < 0) nc = focusableElements[nr].length - 1;
                     else if (nc >= focusableElements[nr].length) nc = 0;
-                    if (focusableElements[nr]) {
-                        const newEl = focusableElements[nr][nc];
-						console.log('Focus moved to:', describe(newEl));
-                        if (previousElement) {
-                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-                            if (previousElement.classList.contains('clickable-overlay')) {
-                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                                if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+
+                    const newEl = focusableElements[nr] ? focusableElements[nr][nc] : null;
+                    if (!newEl) return;
+
+                    console.log('Focus moved to:', describe(newEl));
+
+                    // Remove highlight from previous
+                    if (previousElement) {
+                        previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+                        if (previousElement.classList.contains('clickable-overlay')) {
+                            const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                            if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+                        }
+                    }
+                    if (previousElement?.id === 'mediaButton') {
+                        const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                        if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+                    }
+
+                    // Highlight new element
+                    newEl.classList.add('keyboard-nav-highlight');
+                    if (newEl.classList.contains('emby-scrollbuttons-button')) {
+                        newEl.classList.add('highlight-chevron');
+                    }
+                    scrollIntoView(newEl);
+
+                    // If it’s a clickable overlay inside a featured iframe, trigger hover state
+                    if (newEl.classList.contains('clickable-overlay')) {
+                        const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                        if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
+                    }
+                    if (newEl.id === 'mediaButton') {
+                        const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                        if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
+                    }
+
+                    currentRow = nr;
+                    currentCol = nc;
+                    previousElement = newEl;
+                }
+
+                function initializeFocus() {
+                    checkNowPlayingMode();
+                    updateFocusableElements();
+
+                    const url = window.top.location.href;
+                    let first = null;
+
+                    // 1) If on home page, focus rightButton inside featured iframe
+                    if (url.includes('#/home.html')) {
+                        const iframe = jellyfin.document.querySelector('.featurediframe');
+                        const btn = iframe?.contentDocument?.querySelector('#rightButton');
+                        if (btn && isElementVisible(btn)) {
+                            first = btn;
+                        }
+                    }
+                    // 2) If on video page, focus pause button
+                    else if (url.includes('#/video')) {
+                        const btnPause = jellyfin.document.querySelector('button.btnPause');
+                        if (btnPause && isElementVisible(btnPause)) {
+                            first = btnPause;
+                        }
+                    }
+
+                    // 3) Otherwise use default priority selectors
+                    if (!first) {
+                        const priSel = [
+                            'button[is="emby-button"][data-action="resume"]',
+                            'button[is="emby-button"][data-action="play"]',
+                            '.itemsContainer .cardBox'
+                        ];
+                        for (const sel of priSel) {
+                            const el = jellyfin.document.querySelector(sel);
+                            if (el && isElementVisible(el)) {
+                                first = el;
+                                break;
                             }
                         }
-						if (previousElement?.id === 'mediaButton') {
-							const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-							if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
-						}
-                        newEl.classList.add('keyboard-nav-highlight');
-                        if (newEl.classList.contains('emby-scrollbuttons-button')) newEl.classList.add('highlight-chevron');
-                        scrollIntoView(newEl);
-                        if (newEl.classList.contains('clickable-overlay')) {
-                            const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                            if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
-                        }
-						if (newEl.id === 'mediaButton') {
-							const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-							if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
-						}
-                        currentRow = nr; currentCol = nc; previousElement = newEl;
                     }
-                };
 
-				const initializeFocus = () => {
-					checkNowPlayingMode();
-					updateFocusableElements();
+                    // 4) Fallback to first element in the grid
+                    if (!first && focusableElements.length && focusableElements[0].length) {
+                        first = focusableElements[0][0];
+                    }
 
-					const url = window.top.location.href;
-					let first = null;
+                    // 5) Highlight and scroll into view
+                    if (first) {
+                        if (previousElement && previousElement !== first) {
+                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+                        }
+                        first.classList.add('keyboard-nav-highlight');
+                        if (first.classList.contains('emby-scrollbuttons-button')) {
+                            first.classList.add('highlight-chevron');
+                        }
+                        scrollIntoView(first);
 
-					// 1) If on the homepage, focus the rightButton inside the featured iframe
-					if (url.includes('#/home.html')) {
-						const iframe = jellyfin.document.querySelector('.featurediframe');
-						const btn = iframe?.contentDocument?.querySelector('#rightButton');
-						if (btn && isElementVisible(btn)) {
-							first = btn;
-						}
-					}
-					// 2) Else if on a video page, focus the pause button
-					else if (url.includes('#/video')) {
-						const btnPause = jellyfin.document.querySelector('button.btnPause');
-						if (btnPause && isElementVisible(btnPause)) {
-							first = btnPause;
-						}
-					}
+                        // Update pointers to match the grid position
+                        for (let i = 0; i < focusableElements.length; i++) {
+                            const ci = focusableElements[i].indexOf(first);
+                            if (ci !== -1) {
+                                currentRow = i;
+                                currentCol = ci;
+                                break;
+                            }
+                        }
+                        previousElement = first;
+                    } else {
+                        currentRow = currentCol = -1;
+                    }
+                }
 
-					// 3) Otherwise use the default priority selectors
-					if (!first) {
-						const priSel = [
-							'button[is="emby-button"][data-action="resume"]',
-							'button[is="emby-button"][data-action="play"]',
-							'.itemsContainer .cardBox'
-						];
-						for (const sel of priSel) {
-							const el = jellyfin.document.querySelector(sel);
-							if (el && isElementVisible(el)) {
-								first = el;
-								break;
-							}
-						}
-					}
-
-					// 4) Fallback to the first item in the grid
-					if (!first && focusableElements.length && focusableElements[0].length) {
-						first = focusableElements[0][0];
-					}
-
-					// 5) Highlight and scroll into view as before
-					if (first) {
-						if (previousElement && previousElement !== first) {
-							previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-						}
-						first.classList.add('keyboard-nav-highlight');
-						if (first.classList.contains('emby-scrollbuttons-button')) first.classList.add('highlight-chevron');
-						scrollIntoView(first);
-
-						// update our row/col & previousElement pointers
-						for (let i = 0; i < focusableElements.length; i++) {
-							const ci = focusableElements[i].indexOf(first);
-							if (ci !== -1) {
-								currentRow = i;
-								currentCol = ci;
-								break;
-							}
-						}
-						previousElement = first;
-					} else {
-						currentRow = currentCol = -1;
-					}
-				};
-
-                const handleEnter = () => {
+                // Handle “Enter” key when activated on a focused element
+                function handleEnter() {
                     if (currentRow === -1 || currentCol === -1) {
                         initializeFocus();
                         return;
                     }
                     const active = focusableElements[currentRow][currentCol];
-					console.log('Enter pressed on:', describe(active));
+                    console.log('Enter pressed on:', describe(active));
+
+                    // If it’s a video player inside a featured iframe, toggle playback via “k” key
                     if (active.classList.contains('video-player') || active.querySelector('.video-player')) {
                         const spotIframe = jellyfin.document.querySelector('.featurediframe');
                         if (spotIframe?.contentWindow?.controlYouTubePlayer) {
@@ -746,176 +779,237 @@
                             skipFocusReset = true;
                         }
                     } else {
-                        const isNavAction = active.matches('a[href], button[data-action="navigate"]') || active.querySelector('a[href*="/web/index.html#!/item"], button[data-action="navigate"]');
+                        // Otherwise, click the element or any nested <a> / <button>
+                        const isNavAction = active.matches('a[href], button[data-action="navigate"]')
+                                         || active.querySelector('a[href*="/web/index.html#!/item"], button[data-action="navigate"]');
                         if (isNavAction) isNavigating = true;
                         (active.querySelector('a[href*="/web/index.html#!/item"], button, a') || active).click();
                     }
-                    const isLR = ['leftButton','rightButton'].includes(active.id) || active.closest('#leftButton') || active.closest('#rightButton');
+
+                    // If left/right navigation button, preserve focus state
+                    const isLR = ['leftButton', 'rightButton'].includes(active.id)
+                              || active.closest('#leftButton')
+                              || active.closest('#rightButton');
                     if (isLR) skipFocusReset = true;
+
                     if (!isLR && !skipFocusReset) {
                         if (previousElement) {
-                            previousElement.classList.remove('keyboard-nav-highlight','highlight-chevron','video-focused');
+                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
                             if (previousElement.classList.contains('clickable-overlay')) {
-                                const iframe = jellyfin.document.querySelector('iframe.featurediframe'); if (iframe) toggleHover(iframe.contentDocument||iframe.contentWindow.document,false);
+                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                                if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
                             }
                         }
-                        
-                    } else {
-                        
                     }
-                };
+                }
 
-               
-                // Input handling
+                // ───────────────────────────────────────────────────────────────────────────────
+                // INPUT HANDLERS (KEystrokes → VIRTUAL “TV MODE” BEHAVIOR)
+                // ───────────────────────────────────────────────────────────────────────────────
 
-                const handleKeydown = e => {
-                    const activeEl = jellyfin.document.activeElement, tag = activeEl.tagName.toLowerCase();
-                    if (['input','textarea'].includes(tag) || activeEl.isContentEditable) return;
+                function handleKeydown(e) {
+                    const activeEl = jellyfin.document.activeElement;
+                    const tag      = activeEl.tagName.toLowerCase();
+                    if (['input', 'textarea'].includes(tag) || activeEl.isContentEditable) return;
+
+                    // If no element is highlighted yet, initialize focus grid
                     if (!previousElement) {
                         initializeFocus();
                         e.preventDefault();
                         return;
                     }
-                    switch(e.key) {
+
+                    switch (e.key) {
                         case 'ArrowUp':
-							moveFocus(-1, 0);
-							if (!osdExtrasActive) {
-								osdExtrasActive = true;
-								showOsdExtras();
-							} else {
-								osdExtrasActive = false;
-								hideOsdExtras();
-							}
-							
-							e.preventDefault();
-							break;
+                            // Toggle OSD extras on/off
+                            moveFocus(-1, 0);
+                            if (!osdExtrasActive) {
+                                osdExtrasActive = true;
+                                showOsdExtras();
+                            } else {
+                                osdExtrasActive = false;
+                                hideOsdExtras();
+                            }
+                            e.preventDefault();
+                            break;
 
-                        case 'ArrowDown': updateFocusableElements(); moveFocus(1,0); e.preventDefault(); break;
-                        
-						case 'ArrowLeft':
-						case 'ArrowRight': {
-							const direction = e.key === 'ArrowLeft' ? -1 : 1;
+                        case 'ArrowDown':
+                            updateFocusableElements();
+                            moveFocus(1, 0);
+                            e.preventDefault();
+                            break;
 
+                        case 'ArrowLeft':
+                        case 'ArrowRight': {
+                            const direction = e.key === 'ArrowLeft' ? -1 : 1;
+                            const slider = jellyfin.document.querySelector('.osdPositionSlider');
+                            // If slider is visible and we are in simple OSD (no extras), let native behavior run after focusing
+                            if (slider && isElementVisible(slider) && !osdExtrasActive) {
+                                if (previousElement) {
+                                    previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+                                }
+                                previousElement = slider;
+                                slider.classList.add('keyboard-nav-highlight');
+                                slider.focus();
+                                scrollIntoView(slider);
+                                return;
+                            }
+                            // If in OSD extras, navigate within the extras overlay
+                            if (osdExtrasActive) {
+                                moveFocus(0, direction);
+                                e.preventDefault();
+                                e.stopPropagation();
+                                break;
+                            }
+                            // Otherwise, fallback navigation: move focus in main grid
+                            moveFocus(0, direction);
+                            e.preventDefault();
+                            break;
+                        }
 
-							// Try to focus the slider
-							const slider = jellyfin.document.querySelector('.osdPositionSlider');
-							if (slider && isElementVisible(slider) && !osdExtrasActive) {
-								if (previousElement) {
-									previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-								}
-								previousElement = slider;
-								slider.classList.add('keyboard-nav-highlight');
-								slider.focus(); // allow native handling after that
-								scrollIntoView(slider);
-								return;
-							}
-							
-							
-							if (osdExtrasActive) {
-								// Stay in OSD extras mode — navigate using virtual focus
-								
-								moveFocus(0, direction);
-								e.preventDefault();
-								e.stopPropagation();
-								break;
-							}
+                        case 'Enter':
+                            if (nowPlayingMode && !osdExtrasActive) {
+                                // On video page, if extras are not shown, intercept Enter to toggle playback
+                                e.preventDefault();
+                                e.stopPropagation();
 
-							// Fallback navigation
-							
-							moveFocus(0, direction);
-							e.preventDefault();
-							break;
-						}
+                                const btnPause = jellyfin.document.querySelector('.btnPause');
+                                if (btnPause) {
+                                    if (previousElement) {
+                                        previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
+                                    }
+                                    previousElement = btnPause;
+                                    btnPause.classList.add('keyboard-nav-highlight');
+                                }
+                                const kEvent = new KeyboardEvent('keydown', {
+                                    key: 'k',
+                                    code: 'KeyK',
+                                    bubbles: true,
+                                    cancelable: true
+                                });
+                                jellyfin.document.dispatchEvent(kEvent);
+                                return;
+                            }
+                            // Otherwise, handle Enter normally (invoke `handleEnter`)
+                            handleEnter();
+                            e.preventDefault();
+                            e.stopPropagation();
+                            break;
+                    }
+                }
 
-						case 'Enter':
-							if (nowPlayingMode && !osdExtrasActive) {
-								// fully intercept Enter only if not in osdExtras
-								e.preventDefault();
-								e.stopPropagation();
+                // ───────────────────────────────────────────────────────────────────────────────
+                // SPA NAVIGATION DETECTION (RESET FOCUS & STATE)
+                // ───────────────────────────────────────────────────────────────────────────────
 
-								// move virtual focus to the play/pause button
-								const btnPause = jellyfin.document.querySelector('.btnPause');
-								if (btnPause) {
-									if (previousElement) {
-										previousElement.classList.remove('keyboard-nav-highlight','highlight-chevron','video-focused');
-									}
-									previousElement = btnPause;
-									btnPause.classList.add('keyboard-nav-highlight');
-								}
+                function handleLocationChange() {
+                    if (previousElement) {
+                        previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+                    }
+                    focusableElements = [];
+                    currentRow = -1;
+                    currentCol = -1;
+                    previousElement = null;
+                    updateFocusableElements();
+                    initializeFocus();
+                }
 
-								// synthesize a 'k' keydown to toggle playback
-								const kEvent = new KeyboardEvent('keydown', {
-									key: 'k',
-									code: 'KeyK',
-									bubbles: true,
-									cancelable: true
-								});
-								jellyfin.document.dispatchEvent(kEvent);
-								return;
-							}
+                window.addEventListener('hashchange', handleLocationChange);
+                window.addEventListener('popstate', handleLocationChange);
 
-							// Otherwise allow natural Enter behavior
-							handleEnter();
-							e.preventDefault();
-							e.stopPropagation();
-							break;
-					}
+                // Also patch history.pushState to catch manual pushes
+                const _pushState = history.pushState;
+                history.pushState = function (...args) {
+                    _pushState.apply(this, args);
+                    handleLocationChange();
                 };
 
-                const handleBack = () => setTimeout(() => { if (!skipFocusReset) { isInitialized = false; init(); } }, 250);
-                const handleIframeLoad = iframe => { const doc = iframe.contentDocument||iframe.contentWindow.document; if (doc) { addStyles(doc,true); injectIframeHoverStyles(doc); }};
+                // On “back” from nested navigation, reinitialize focus
+                function handleBack() {
+                    setTimeout(() => {
+                        if (!skipFocusReset) {
+                            isInitialized = false;
+                            init();
+                        }
+                    }, 250);
+                }
 
+                window.addEventListener('popstate', handleBack, { passive: true });
 
-                const init = () => {
-                    
+                // Poll the URL every 1.25s in case the SPA changes without firing a hash/popstate
+                function checkNav() {
+                    const newLoc = window.top.location.href + window.top.location.hash;
+                    if (newLoc !== currentLocation) {
+                        currentLocation = newLoc;
+                        isInitialized = false;
+                        isNavigating = false;
+                        if (previousElement) {
+                            previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
+                        }
+                        previousElement = null;
+                        currentRow = -1;
+                        currentCol = -1;
+                        focusableElements = [];
+                        init();
+                    }
+                }
+
+                setInterval(checkNav, 1250);
+
+                // ───────────────────────────────────────────────────────────────────────────────
+                // INITIALIZATION
+                // ───────────────────────────────────────────────────────────────────────────────
+
+                // Called once at startup (and again on SPA navigation)
+                function init() {
                     addStyles(jellyfin.document);
+
+                    // Rebind keydown listener
                     jellyfin.document.removeEventListener('keydown', handleKeydown, true);
-                    jellyfin.document.addEventListener('keydown', handleKeydown, { passive:false, capture:true });
-                    window.removeEventListener('popstate', handleBack);
-                    window.addEventListener('popstate', handleBack, { passive:true });
-                    if (mutationObserver) { mutationObserver.disconnect(); mutationObserver = null; }
+                    jellyfin.document.addEventListener('keydown', handleKeydown, { passive: false, capture: true });
+
+                    // Set up a MutationObserver to watch for DOM changes (e.g., new page content)
+                    if (mutationObserver) {
+                        mutationObserver.disconnect();
+                        mutationObserver = null;
+                    }
                     mutationObserver = new MutationObserver(() => {
                         checkNowPlayingMode();
                         if (!skipFocusReset) {
                             updateFocusableElements();
-                            if (isNavigating) { initializeFocus(); isNavigating=false; }
+                            if (isNavigating) {
+                                initializeFocus();
+                                isNavigating = false;
+                            }
                         }
                     });
-                    mutationObserver.observe(jellyfin.document.body, { childList:true, subtree:true });
+                    mutationObserver.observe(jellyfin.document.body, { childList: true, subtree: true });
+
+                    // For any existing featured iframes, inject styles and hover logic
                     jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
                         handleIframeLoad(iframe);
                         iframe.removeEventListener('load', handleIframeLoad);
-                        iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive:true });
+                        iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
                     });
+
                     isInitialized = true;
+                    // Force one more update of focusable elements after 2 seconds (fallback)
                     setTimeout(() => {
                         console.log('↪ Forcing fallback update of focusable elements (2s post-init)');
                         updateFocusableElements();
                     }, 2000);
-                };
+                }
 
-				const checkNav = () => {
-					const newLoc = window.top.location.href + window.top.location.hash;
-					if (newLoc !== currentLocation) {
-						currentLocation = newLoc;
-						isInitialized = false;
-						isNavigating = false;
+                // Called whenever a featured iframe loads
+                function handleIframeLoad(iframe) {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc) {
+                        addStyles(doc, true);
+                        injectIframeHoverStyles(doc);
+                    }
+                }
 
-						if (previousElement) {
-							previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
-						}
-						previousElement = null;
-						currentRow = -1;
-						currentCol = -1;
-						focusableElements = [];
-
-						init();
-					}
-				};
-
-
-                setInterval(checkNav, 1250);
-                window.addEventListener('hashchange', () => { isInitialized=false; isNavigating=false; init(); }, { passive:true });
+                // Kick off the whole system
                 init();
             }, 800);
         }, { passive: true });
