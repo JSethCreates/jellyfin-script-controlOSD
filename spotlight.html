@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.2</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: #6750A4; }
@@ -148,7 +148,7 @@
                 }
 
                 // ───────────────────────────────────────────────────────────────────────────────
-                // STYLE INJECTION (TV MODE STYLES)
+                // STYLE INJECTION (TV MODE [REMOTE CONTROL] SIMULATION AND OTHER ADJUSTMENTS)
                 // ───────────────────────────────────────────────────────────────────────────────
 
                 function addStyles(doc, isIframe = false) {
@@ -221,7 +221,7 @@
                             color: inherit !important;
                         }
 
-                        /* Highlight animation */
+                        /* Highlight animation 
                         .keyboard-nav-highlight {
                             position: relative;
                             transition: transform 0.3s ease, background-color 0.3s ease;
@@ -234,6 +234,9 @@
                             50%  { box-shadow: 0 0 20px ${boxShadowColor}; }
                             100% { box-shadow: 0 0 10px ${boxShadowColor}; }
                         }
+						*/
+
+
                         /* In an iframe, disable the box-shadow */
                         .featurediframe .keyboard-nav-highlight {
                             transform: none !important;
