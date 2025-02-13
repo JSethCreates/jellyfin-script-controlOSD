@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.2</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.3</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: #6750A4; }
@@ -103,31 +103,70 @@
                 }
 
                 // Return a short text description of an element (for debugging)
-                function describe(el) {
-                    const parts = [el.tagName.toLowerCase()];
-                    if (el.id) parts.push(`#${el.id}`);
-                    if (el.classList.length) parts.push(`.${[...el.classList].join('.')}`);
-                    const label = el.getAttribute('aria-label') || el.title;
-                    if (label) parts.push(`("${label}")`);
-                    return parts.join('');
-                }
+				function describe(el) {
+				  const parts = [ el.tagName.toLowerCase() ];
+
+				  // 1) #id
+				  if (el.id) {
+					parts.push(`#${el.id}`);
+				  }
+
+				  // 2) .class1.class2…
+				  if (el.classList.length) {
+					parts.push(`.${[...el.classList].join('.')}`);
+				  }
+
+				  // 3) aria-label or title or fallback to innerText (trimmed)
+				  let label = el.getAttribute('aria-label') || el.title;
+				  if (!label) {
+					const txt = el.textContent?.trim();
+					if (txt) label = txt.length > 30 ? txt.slice(0, 27) + '…' : txt;
+				  }
+				  if (label) {
+					parts.push(`("${label}")`);
+				  }
+
+				  // 4) data-item-id (if you happen to tag items that way)
+				  if (el.dataset && el.dataset.itemId) {
+					parts.push(`[data-item-id=${el.dataset.itemId}]`);
+				  }
+
+				  // 5) if this is an anchor, show a shortened href
+				  if (el.tagName.toLowerCase() === 'a' && el.href) {
+					const href = el.href.length > 40
+					  ? el.href.slice(0, 37) + '…'
+					  : el.href;
+					parts.push(`(href="${href}")`);
+				  }
+
+				  return parts.join('');
+				}
 
                 // Determine if an element is visible (not display:none, opacity:0, or hidden by an ancestor)
                 function isElementVisible(el) {
-                    const style = window.getComputedStyle(el);
-                    if (style.display === 'none' || style.visibility !== 'visible' || parseFloat(style.opacity) === 0) {
-                        return false;
-                    }
-                    let parent = el.parentElement;
-                    while (parent) {
-                        const pStyle = window.getComputedStyle(parent);
-                        if (pStyle.display === 'none' || pStyle.visibility !== 'visible' || parseFloat(pStyle.opacity) === 0) {
-                            return false;
-                        }
-                        parent = parent.parentElement;
-                    }
-                    return true;
-                }
+				  // 1) Walk up the DOM to ensure no ancestor is hidden via CSS
+				  let current = el;
+				  while (current) {
+					if (current instanceof Element) {
+					  const style = window.getComputedStyle(current);
+					  if (
+						style.display === 'none' ||
+						style.visibility !== 'visible' ||
+						parseFloat(style.opacity) === 0
+					  ) {
+						return false;
+					  }
+					}
+					current = current.parentElement;
+				  }
+
+				  // 2) Make sure the element occupies physical space (width/height > 0)
+				  if (el.offsetWidth <= 0 || el.offsetHeight <= 0) {
+					return false;
+				  }
+
+				  return true;
+				}
 
                 // Smoothly scroll an element into view, handling carousels if needed
                 function scrollIntoView(el) {
@@ -221,7 +260,7 @@
                             color: inherit !important;
                         }
 
-                        /* Highlight animation 
+                        /* Highlight animation glow, bit too fancy?
                         .keyboard-nav-highlight {
                             position: relative;
                             transition: transform 0.3s ease, background-color 0.3s ease;
@@ -431,7 +470,7 @@
                             right: '3em',
                             maxWidth: '500px',
                             maxHeight: '500px',
-                            zIndex: 998,
+                            zIndex: 999,
                             pointerEvents: 'none'
                         });
                         jellyfin.document.body.appendChild(clearArtEl);
@@ -477,7 +516,7 @@
                                 text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
                                 box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
                                 pointer-events: none;
-                                z-index: 9999;
+                                z-index: 998;
                             }
                             .osd-hidden { display: none !important; }
                             .headerLeft {
@@ -601,7 +640,7 @@
                     let processed = [];
 
                     elements.forEach(el => {
-                        if (el.classList.contains('featurediframe')) {
+                        if (el.classList.contains('featurediframe') && isElementVisible(el)) {
                             const iframeDoc = el.contentDocument || el.contentWindow.document;
                             if (iframeDoc) {
                                 addStyles(iframeDoc, true);
@@ -823,18 +862,22 @@
                     }
 
                     switch (e.key) {
-                        case 'ArrowUp':
-                            // Toggle OSD extras on/off
-                            moveFocus(-1, 0);
-                            if (!osdExtrasActive) {
-                                osdExtrasActive = true;
-                                showOsdExtras();
-                            } else {
-                                osdExtrasActive = false;
-                                hideOsdExtras();
-                            }
-                            e.preventDefault();
-                            break;
+						case 'ArrowUp':
+							moveFocus(-1, 0);
+
+							// only toggle extras if we’re on a video page
+							if (nowPlayingMode) {
+								if (!osdExtrasActive) {
+									osdExtrasActive = true;
+									showOsdExtras();
+								} else {
+									osdExtrasActive = false;
+									hideOsdExtras();
+								}
+							}
+
+							e.preventDefault();
+							break;
 
                         case 'ArrowDown':
                             updateFocusableElements();
@@ -998,9 +1041,9 @@
                     isInitialized = true;
                     // Force one more update of focusable elements after 2 seconds (fallback)
                     setTimeout(() => {
-                        console.log('↪ Forcing fallback update of focusable elements (2s post-init)');
+                        console.log('↪ Forcing fallback update of focusable elements (.1s post-init)');
                         updateFocusableElements();
-                    }, 2000);
+                    }, 100);
                 }
 
                 // Called whenever a featured iframe loads
