@@ -1,27 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.5</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.7</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-        :root { --highlight-color: #6750A4; }
+        :root { --highlight-color: var(--md-sys-color-primary); }
 
-        /* Basic highlight classes */
+        /* Basic highlight classes needed to force colors through to iframes*/
         .keyboard-nav-highlight {
-            background-color: var(--highlight-color) !important;
-            transform: scale(1.15);
-            transition: transform 0.3s ease, outline 0.3s ease, box-shadow 0.3s ease;
-        }
-        .highlight-chevron {
             background-color: var(--highlight-color) !important;
         }
         .featurediframe .keyboard-nav-highlight {
             transform: none !important;
             box-shadow: none !important;
         }
+		
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+		
             setTimeout(() => {
                 // ───────────────────────────────────────────────────────────────────────────────
                 // GLOBAL VARIABLES & STATE
@@ -190,7 +187,7 @@
                 // STYLE INJECTION (TV MODE [REMOTE CONTROL] SIMULATION AND OTHER ADJUSTMENTS)
                 // ───────────────────────────────────────────────────────────────────────────────
 
-                function addStyles(doc, isIframe = false) {
+                function addStyles(doc, isIframe = false, highlightColor = '#4edad3') {
                     if (doc.getElementById('tv-nav-styles')) return;
 
                     const style = doc.createElement('style');
@@ -204,7 +201,7 @@
                             --highlight-color: ${highlightColor};
                             --md-hover-primary: rgba(103, 80, 164, 0.12);
                             --md-hover-on-surface: rgba(28, 27, 31, 0.08);
-                            --md-sys-color-primary: #6750A4;
+                            --md-sys-color-primary: ${highlightColor};
                             --md-sys-color-on-primary: #FFFFFF;
                             --md-sys-color-surface: #FFFBFE;
                             --md-sys-color-surface-container-low: #F7F2FA;
@@ -235,9 +232,7 @@
 						.emby-tab-button[data-id="home"]::after {
 							content: "";
 						}
-						
-						
-						
+													
                         /* Override the default Jellyfin page title asset */
                         .pageTitleWithDefaultLogo {
                             background-image: url(/assets/img/icon-transparent.png) !important;
@@ -267,9 +262,9 @@
                         }
 						/* Style for Header Buttons */
 						.emby-tab-button.keyboard-nav-highlight {
+							border-radius: 4px;
 							background-color: var(--md-sys-color-primary) !important;
 							color: var(--md-sys-color-on-primary) !important;
-							border-radius: var(--md-border-radius, 4px);
 							box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 							transition: background-color 0.2s ease, transform 0.2s ease;
 						}
@@ -298,11 +293,10 @@
                         }
 						*/
 
-
                         /* In an iframe, disable the box-shadow */
                         .featurediframe .keyboard-nav-highlight {
                             transform: none !important;
-                            outline: 2px solid var(--highlight-color);
+                            outline: 2px solid var(--md-sys-color-primary);
                             box-shadow: none !important;
                             animation: none !important;
                         }
@@ -412,97 +406,154 @@
                 // OSD HANDLING (SIMPLE vs. EXTRAS MODE)
                 // ───────────────────────────────────────────────────────────────────────────────
 
-                function hideOsdExtras() {
-                    // Hide all “extra” elements
-                    osdElementsToHide.forEach(sel =>
-                        jellyfin.document.querySelectorAll(sel).forEach(el =>
-                            el.classList.add('osd-hidden')
-                        )
-                    );
-                    // Remove special Pause styling
-                    const btnPause = jellyfin.document.querySelector('button.btnPause');
-                    if (btnPause) btnPause.classList.remove('osdExtrasMode');
+				function hideOsdExtras() {
+					osdElementsToHide.forEach(sel =>
+						jellyfin.document.querySelectorAll(sel).forEach(el =>
+							el.classList.add('osd-hidden')
+						)
+					);
 
-                    // Hide ClearArt if present
-                    const clearArtEl = jellyfin.document.getElementById('osdClearArt');
-                    if (clearArtEl) clearArtEl.classList.add('osd-hidden');
-                }
+					const btnPause = jellyfin.document.querySelector('button.btnPause');
+					if (btnPause) btnPause.classList.remove('osdExtrasMode');
 
-                function showOsdExtras() {
-                    // Reveal all OSD elements
-                    osdElementsToHide.forEach(sel =>
-                        jellyfin.document.querySelectorAll(sel).forEach(el =>
-                            el.classList.remove('osd-hidden')
-                        )
-                    );
+					const clearArtEl = jellyfin.document.getElementById('osdClearArt');
+					if (clearArtEl) clearArtEl.classList.add('osd-hidden');
 
-                    // Mark Pause button as “extras” mode and focus it
-                    const btnPause = jellyfin.document.querySelector('button.btnPause');
-                    if (btnPause) {
-                        btnPause.classList.add('osdExtrasMode');
-                        if (isElementVisible(btnPause)) {
-                            btnPause.classList.add('keyboard-nav-highlight');
-                            scrollIntoView(btnPause);
-                            btnPause.focus();
-                            previousElement = btnPause;
-                        }
-                    }
+					const versionEl = jellyfin.document.getElementById('osdMoreText');
+					if (versionEl) versionEl.classList.add('osd-hidden');
 
-                    // Simulate pressing “ArrowDown” once to move virtual focus downward
-                    const downArrowEvent = new KeyboardEvent('keydown', {
-                        key: 'ArrowDown',
-                        code: 'ArrowDown',
-                        bubbles: true,
-                        cancelable: true
-                    });
-                    jellyfin.document.dispatchEvent(downArrowEvent);
+					const mediaInfoEl = jellyfin.document.getElementById('osdMediaInfo');
+					if (mediaInfoEl) mediaInfoEl.classList.add('osd-hidden');
+				}
 
-                    // ─── Fetch current video’s Item ID & API Key ─────────────────────────────
-                    let itemId = null, apiKey = null;
-                    const video = jellyfin.document.querySelector('video');
-                    if (video) {
-                        const src = video.currentSrc || video.src;
-                        const idMatch  = src.match(/\/Videos\/([0-9a-f]{32})\//i)
-                                      || src.match(/mediaSourceId=([0-9a-f]{32})/i);
-                        const keyMatch = src.match(/api_key=([0-9a-f]{32})/i);
-                        itemId = idMatch && idMatch[1];
-                        apiKey = keyMatch && keyMatch[1];
-                    }
+				function showOsdExtras() {
+					// Reveal all OSD elements
+					osdElementsToHide.forEach(sel =>
+						jellyfin.document.querySelectorAll(sel).forEach(el =>
+							el.classList.remove('osd-hidden')
+						)
+					);
 
-                    // ─── Plot: insert overview text into #osdMoreText ─────────────────────────
-                    const versionEl = jellyfin.document.getElementById('osdMoreText');
-                    if (versionEl && itemId) {
-                        const url = `/Items/${itemId}${apiKey ? `?api_key=${apiKey}` : ''}`;
-                        fetch(url)
-                            .then(res => res.json())
-                            .then(data => {
-                                versionEl.textContent = data.Overview || '(No plot available)';
-                            })
-                            .catch(err => console.error('Error fetching plot:', err));
-                    }
+					// Mark Pause button as “extras” mode and focus it
+					const btnPause = jellyfin.document.querySelector('button.btnPause');
+					if (btnPause) {
+						btnPause.classList.add('osdExtrasMode');
+						if (isElementVisible(btnPause)) {
+							btnPause.classList.add('keyboard-nav-highlight');
+							scrollIntoView(btnPause);
+							btnPause.focus();
+							previousElement = btnPause;
+						}
+					}
 
-                    // ─── ClearArt: create or update an <img> for clearart ─────────────────────
-                    let clearArtEl = jellyfin.document.getElementById('osdClearArt');
-                    if (!clearArtEl) {
-                        clearArtEl = jellyfin.document.createElement('img');
-                        clearArtEl.id = 'osdClearArt';
-                        clearArtEl.classList.add('osd-hidden');
-                        Object.assign(clearArtEl.style, {
-                            position: 'fixed',
-                            bottom: '5.7em',
-                            right: '3em',
-                            maxWidth: '500px',
-                            maxHeight: '500px',
-                            zIndex: 999,
-                            pointerEvents: 'none'
-                        });
-                        jellyfin.document.body.appendChild(clearArtEl);
-                    }
-                    if (itemId) {
-                        clearArtEl.src = `/Items/${itemId}/Images/Art${apiKey ? `?api_key=${apiKey}` : ''}`;
-                        clearArtEl.classList.remove('osd-hidden');
-                    }
-                }
+					// ─── Fetch Item ID & API Key ─────────────────────────────
+					let itemId = null, apiKey = null;
+					const video = jellyfin.document.querySelector('video');
+					if (video) {
+						const src = video.currentSrc || video.src;
+						const idMatch = src.match(/\/Videos\/([0-9a-f]{32})\//i) || src.match(/mediaSourceId=([0-9a-f]{32})/i);
+						const keyMatch = src.match(/api_key=([0-9a-f]{32})/i);
+						itemId = idMatch && idMatch[1];
+						apiKey = keyMatch && keyMatch[1];
+					}
+
+					// ─── Create or update new media info block ───────────────
+					let mediaInfoEl = jellyfin.document.getElementById('osdMediaInfo');
+					if (!mediaInfoEl) {
+						mediaInfoEl = jellyfin.document.createElement('div');
+						mediaInfoEl.id = 'osdMediaInfo';
+						Object.assign(mediaInfoEl.style, {
+							position: 'fixed',
+							bottom: '6.5em',
+							left: '12px',
+							fontFamily: 'Inter, sans-serif',
+							fontSize: '14pt',
+							fontWeight: '600',
+							color: 'var(--md-sys-color-tertiary)',
+							backgroundColor: 'rgba(0,0,0,0.5)',
+							padding: '6px 10px',
+							borderRadius: '5px',
+							maxWidth: '70vw',
+							whiteSpace: 'pre-wrap',
+							zIndex: 997,
+							textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)'
+						});
+						jellyfin.document.body.appendChild(mediaInfoEl);
+					}
+					mediaInfoEl.classList.remove('osd-hidden');
+
+					// ─── Fetch metadata to populate media info and plot ──────
+					const versionEl = jellyfin.document.getElementById('osdMoreText');
+					if (itemId) {
+						const url = `/Items/${itemId}${apiKey ? `?api_key=${apiKey}` : ''}`;
+						fetch(url)
+							.then(res => res.json())
+							.then(data => {
+								// Plot text
+								if (versionEl) {
+									versionEl.textContent = data.Overview || '(No plot available)';
+								}
+
+								// Media info formatting
+								const streams = data.MediaStreams || [];
+								const videoStream = streams.find(s => s.Type === 'Video');
+								const audioStream = streams.find(s => s.Type === 'Audio');
+
+								const videoCodec    = videoStream?.Codec?.toUpperCase() || '?';
+								const aspectRatio   = videoStream?.AspectRatio || `${videoStream?.Width}x${videoStream?.Height}`;
+								const resolution    = videoStream?.Width && videoStream?.Height ? `${videoStream.Width}x${videoStream.Height}` : '?';
+
+								const audioCodec    = audioStream?.Codec?.toUpperCase() || '?';
+								const audioChannels = audioStream?.Channels || '?';
+
+								const date = data.PremiereDate ? new Date(data.PremiereDate) : null;
+								const formatDate = d => {
+									const day = d.getDate();
+									const suffix = (n) => (n > 3 && n < 21) ? 'th' : ['st','nd','rd'][((n % 10) - 1)] || 'th';
+									return `${d.toLocaleString('en-US', { month: 'long' })} ${day}${suffix(day)}, ${d.getFullYear()}`;
+								};
+								const airDate = date ? formatDate(date) : 'Unknown';
+
+								const summary = `${airDate} / ${videoCodec} / ${aspectRatio} / ${audioCodec} / ${audioChannels}ch / ${resolution}`;
+								mediaInfoEl.textContent = summary;
+							})
+							.catch(err => {
+								console.error('Error fetching plot or media info:', err);
+								if (versionEl) versionEl.textContent = '(Error loading metadata)';
+							});
+					}
+
+					// ─── ClearArt setup ──────────────────────────────────────
+					let clearArtEl = jellyfin.document.getElementById('osdClearArt');
+					if (!clearArtEl) {
+						clearArtEl = jellyfin.document.createElement('img');
+						clearArtEl.id = 'osdClearArt';
+						clearArtEl.classList.add('osd-hidden');
+						Object.assign(clearArtEl.style, {
+							position: 'fixed',
+							bottom: '5.7em',
+							right: '3em',
+							maxWidth: '500px',
+							maxHeight: '500px',
+							zIndex: 999,
+							pointerEvents: 'none'
+						});
+						jellyfin.document.body.appendChild(clearArtEl);
+					}
+
+					if (itemId) {
+						const metaUrl = `/Items/${itemId}${apiKey ? `?api_key=${apiKey}` : ''}`;
+						fetch(metaUrl)
+							.then(res => res.json())
+							.then(data => {
+								const artId = data.SeriesId || itemId;
+								clearArtEl.src = `/Items/${artId}/Images/Art${apiKey ? `?api_key=${apiKey}` : ''}`;
+								clearArtEl.classList.remove('osd-hidden');
+							})
+							.catch(err => console.error('Error fetching clearart:', err));
+					}
+				}
+
 
                 // ───────────────────────────────────────────────────────────────────────────────
                 // NOW-PLAYING PAGE DETECTION & LOGO INJECTION
@@ -523,7 +574,7 @@
                         style.textContent = `
                             #osdMoreText {
                                 position: fixed;
-                                bottom: 6em;
+                                bottom: 7.8em;
                                 left: 12px;
                                 font-family: 'Inter', sans-serif;
                                 font-weight: 200;
@@ -644,9 +695,12 @@
                         const existingLogo   = jellyfin.document.getElementById('parent-show-logo');
                         const plotEl         = jellyfin.document.getElementById('osdMoreText');
                         const clearArtEl     = jellyfin.document.getElementById('osdClearArt');
+						const mediaInfoEl = jellyfin.document.getElementById('osdMediaInfo');
+						if (mediaInfoEl) mediaInfoEl.remove();
                         if (existingLogo) existingLogo.remove();
                         if (plotEl) plotEl.remove();
                         if (clearArtEl) clearArtEl.remove();
+
 
                         nowPlayingMode = false;
                     }
@@ -728,11 +782,25 @@
                 }
 
 				function moveFocus(dr, dc) {
+					// If there’s nothing at all to focus, bail
 					if (!focusableElements.length) return;
 
+					// Make sure currentRow is valid
+					if (currentRow < 0 || currentRow >= focusableElements.length) {
+						// If we lose our “row” (e.g. after a quick navigation), re‐initialize
+						initializeFocus();
+						return;
+					}
+
+					// Handle vertical movement
 					if (dr === 1 || dr === -1) {
-						// ─── Custom Vertical Navigation ───
-						const currentEl = focusableElements[currentRow]?.[currentCol];
+						const rowArr = focusableElements[currentRow];
+						// If our current column is out of bounds, re‐init
+						if (!rowArr || currentCol < 0 || currentCol >= rowArr.length) {
+							initializeFocus();
+							return;
+						}
+						const currentEl = rowArr[currentCol];
 						if (!currentEl) return;
 						const rect = currentEl.getBoundingClientRect();
 
@@ -757,22 +825,29 @@
 							currentRow = best.r;
 							currentCol = best.c;
 						} else {
-							return; // no valid element found
+							return; // no candidate found
 						}
-					} else {
-						// ─── Horizontal Navigation ───
-						let nr = currentRow, nc = currentCol + dc;
-						if (nc < 0) nc = focusableElements[nr].length - 1;
-						else if (nc >= focusableElements[nr].length) nc = 0;
+					}
+					// Handle horizontal movement
+					else {
+						const rowArr = focusableElements[currentRow];
+						if (!rowArr) {
+							initializeFocus();
+							return;
+						}
+						let nc = currentCol + dc;
+						if (nc < 0) nc = rowArr.length - 1;
+						else if (nc >= rowArr.length) nc = 0;
 						currentCol = nc;
 					}
 
+					// Now that currentRow/currentCol are valid, grab the new element
 					const newEl = focusableElements[currentRow]?.[currentCol];
 					if (!newEl) return;
 
 					console.log('Focus moved to:', describe(newEl));
 
-					// ─── Remove Previous Highlight ───
+					// Remove the old highlight
 					if (previousElement) {
 						previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
 						if (previousElement.classList.contains('clickable-overlay')) {
@@ -785,19 +860,15 @@
 						if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
 					}
 
-					// ─── Highlight New Element ───
+					// Add the new highlight
 					newEl.classList.add('keyboard-nav-highlight');
 					if (newEl.classList.contains('emby-scrollbuttons-button')) {
 						newEl.classList.add('highlight-chevron');
 					}
 					scrollIntoView(newEl);
 
-					// ─── Hover Trigger for Iframe Items ───
-					if (newEl.classList.contains('clickable-overlay')) {
-						const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-						if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
-					}
-					if (newEl.id === 'mediaButton') {
+					// If it’s an iframe overlay or the mediaButton, force the hover state
+					if (newEl.classList.contains('clickable-overlay') || newEl.id === 'mediaButton') {
 						const iframe = jellyfin.document.querySelector('iframe.featurediframe');
 						if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
 					}
@@ -917,7 +988,7 @@
                 }
 
                 // ───────────────────────────────────────────────────────────────────────────────
-                // INPUT HANDLERS (KEystrokes → VIRTUAL “TV MODE” BEHAVIOR)
+                // INPUT HANDLERS (Keystrokes → VIRTUAL “TV MODE” BEHAVIOR)
                 // ───────────────────────────────────────────────────────────────────────────────
 
                 function handleKeydown(e) {
@@ -1037,6 +1108,7 @@
                     initializeFocus();
                 }
 
+				/*
                 window.addEventListener('hashchange', handleLocationChange);
                 window.addEventListener('popstate', handleLocationChange);
 
@@ -1046,6 +1118,7 @@
                     _pushState.apply(this, args);
                     handleLocationChange();
                 };
+				*/
 
                 // On “back” from nested navigation, reinitialize focus
                 function handleBack() {
@@ -1085,7 +1158,8 @@
 
                 // Called once at startup (and again on SPA navigation)
                 function init() {
-                    addStyles(jellyfin.document);
+                    const rootColor = getComputedStyle(document.documentElement).getPropertyValue('--md-sys-color-primary').trim();
+					addStyles(jellyfin.document, false, rootColor);
 
                     // Rebind keydown listener
                     jellyfin.document.removeEventListener('keydown', handleKeydown, true);
@@ -1133,12 +1207,15 @@
 
                 // Called whenever a featured iframe loads
                 function handleIframeLoad(iframe) {
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (doc) {
-                        addStyles(doc, true);
-                        injectIframeHoverStyles(doc);
-                    }
-                }
+					const doc = iframe.contentDocument || iframe.contentWindow.document;
+					if (doc) {
+						const parentColor = getComputedStyle(jellyfin.document.documentElement)
+						  .getPropertyValue('--md-sys-color-primary')
+						  .trim();
+						addStyles(doc, true, parentColor);
+						injectIframeHoverStyles(doc);
+					}
+				}
 
                 // Kick off the whole system
                 init();
