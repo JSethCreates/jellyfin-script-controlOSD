@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.6.7</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.8.1</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -426,134 +426,170 @@
 					if (mediaInfoEl) mediaInfoEl.classList.add('osd-hidden');
 				}
 
-				function showOsdExtras() {
-					// Reveal all OSD elements
-					osdElementsToHide.forEach(sel =>
-						jellyfin.document.querySelectorAll(sel).forEach(el =>
-							el.classList.remove('osd-hidden')
-						)
-					);
+				async function showOsdExtras() {
+				  // ─── Reveal all OSD elements ─────────────────────────────────
+				  osdElementsToHide.forEach(sel =>
+					jellyfin.document.querySelectorAll(sel).forEach(el =>
+					  el.classList.remove('osd-hidden')
+					)
+				  );
 
-					// Mark Pause button as “extras” mode and focus it
-					const btnPause = jellyfin.document.querySelector('button.btnPause');
-					if (btnPause) {
-						btnPause.classList.add('osdExtrasMode');
-						if (isElementVisible(btnPause)) {
-							btnPause.classList.add('keyboard-nav-highlight');
-							scrollIntoView(btnPause);
-							btnPause.focus();
-							previousElement = btnPause;
-						}
+				  // ─── Highlight the Pause button in “extras” mode ──────────────
+				  const btnPause = jellyfin.document.querySelector('button.btnPause');
+				  if (btnPause) {
+					btnPause.classList.add('osdExtrasMode');
+					if (isElementVisible(btnPause)) {
+					  btnPause.classList.add('keyboard-nav-highlight');
+					  scrollIntoView(btnPause);
+					  btnPause.focus();
+					  previousElement = btnPause;
+					}
+				  }
+
+				  // ─── Determine API key (token) & userId ───────────────────────
+				  const doc = jellyfin.document;
+				  let initJson = null;
+				  const initEl = doc.getElementById('jellyfin-initialization-data');
+				  if (initEl) {
+					try { initJson = JSON.parse(initEl.textContent); }
+					catch {}
+				  }
+				  let localCred = null;
+				  try {
+					const raw = localStorage.getItem('jellyfin_credentials');
+					if (raw) localCred = JSON.parse(raw);
+				  } catch {}
+				  const token = initJson?.AccessToken
+							   || localCred?.Servers?.[0]?.AccessToken
+							   || (() => {
+									const video = doc.querySelector('video');
+									const src = video?.currentSrc || video?.src || '';
+									return src.match(/[?&]api_key=([^&]+)/i)?.[1] || null;
+								  })();
+				  const userId = initJson?.User?.Id || localCred?.Servers?.[0]?.UserId;
+				  if (!token) {
+					console.error('⛔ showOsdExtras: no API token found');
+					return;
+				  }
+
+				  // ─── Determine the current itemId ─────────────────────────────
+				  const video = doc.querySelector('video');
+				  const src = video?.currentSrc || video?.src || '';
+				  let itemId = null;
+				  if (src && !src.startsWith('blob:')) {
+					itemId = src.match(/\/Videos\/([0-9a-f]{32})\//i)?.[1]
+						  || src.match(/mediaSourceId=([0-9a-f]{32})/i)?.[1];
+				  }
+				  if (!itemId) {
+					// fallback to Sessions lookup via api_key
+					console.log('🔄 showOsdExtras: falling back to /Sessions');
+					const deviceId = src.match(/[?&]deviceId=([^&]+)/i)?.[1];
+					try {
+					  const resp = await fetch(`/Sessions?api_key=${token}`, { credentials: 'same-origin' });
+					  const sessions = await resp.json();
+					  const session = sessions.find(s =>
+						(userId && s.UserId === userId) && (deviceId ? s.DeviceId === deviceId : true)
+					  ) || sessions.find(s => s.UserId === userId) || sessions[0];
+					  itemId = session?.NowPlayingItem?.Id || session?.NowViewingItem?.Id;
+					} catch (e) {
+					  console.error('⛔ showOsdExtras: error fetching sessions', e);
+					}
+				  }
+				  if (!itemId) {
+					console.error('⛔ showOsdExtras: unable to determine itemId');
+					return;
+				  }
+
+				  // ─── Ensure mediaInfo container exists ────────────────────────
+				  let mediaInfoEl = doc.getElementById('osdMediaInfo');
+				  if (!mediaInfoEl) {
+					mediaInfoEl = doc.createElement('div');
+					mediaInfoEl.id = 'osdMediaInfo';
+					Object.assign(mediaInfoEl.style, {
+					  position: 'fixed',
+					  bottom: '6.5em',
+					  left: '12px',
+					  fontFamily: 'Inter, sans-serif',
+					  fontSize: '14pt',
+					  fontWeight: '600',
+					  color: 'var(--md-sys-color-tertiary)',
+					  backgroundColor: 'rgba(0,0,0,0.5)',
+					  padding: '6px 10px',
+					  borderRadius: '5px',
+					  maxWidth: '70vw',
+					  whiteSpace: 'pre-wrap',
+					  zIndex: 997,
+					  textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)'
+					});
+					doc.body.appendChild(mediaInfoEl);
+				  }
+				  mediaInfoEl.classList.remove('osd-hidden');
+
+				  const versionEl = doc.getElementById('osdMoreText');
+				  if (versionEl) versionEl.classList.remove('osd-hidden');
+
+				  // ─── Fetch metadata (Overview, MediaStreams, SeriesId) ────────
+				  try {
+					const fields = ['Overview','MediaStreams','SeriesId'].join(',');
+					const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
+					const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
+					const data = await metaRes.json();
+
+					// Plot / overview
+					if (versionEl) {
+					  versionEl.textContent = data.Overview || '(No plot available)';
 					}
 
-					// ─── Fetch Item ID & API Key ─────────────────────────────
-					let itemId = null, apiKey = null;
-					const video = jellyfin.document.querySelector('video');
-					if (video) {
-						const src = video.currentSrc || video.src;
-						const idMatch = src.match(/\/Videos\/([0-9a-f]{32})\//i) || src.match(/mediaSourceId=([0-9a-f]{32})/i);
-						const keyMatch = src.match(/api_key=([0-9a-f]{32})/i);
-						itemId = idMatch && idMatch[1];
-						apiKey = keyMatch && keyMatch[1];
+					// Media streams summary
+					const streams = data.MediaStreams || [];
+					const vs = streams.find(s => s.Type==='Video') || {};
+					const as = streams.find(s => s.Type==='Audio') || {};
+					const videoCodec  = (vs.Codec||'?').toUpperCase();
+					const aspectRatio = vs.AspectRatio || (vs.Width&&vs.Height?`${vs.Width}x${vs.Height}`:'?');
+					const resolution  = vs.Width&&vs.Height?`${vs.Width}x${vs.Height}`:'?';
+					const audioCodec  = (as.Codec||'?').toUpperCase();
+					const audioCh     = as.Channels || '?';
+					let airDate = 'Unknown';
+					if (data.PremiereDate) {
+					  const d = new Date(data.PremiereDate);
+					  const day = d.getDate();
+					  const suffix = (n=>(n>3&&n<21)?'th':['st','nd','rd'][((n%10)-1)]||'th')(day);
+					  airDate = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
 					}
+					mediaInfoEl.textContent =
+					  `${airDate} / ${videoCodec} / ${aspectRatio} / ${audioCodec} / ${audioCh}ch / ${resolution}`;
+				  } catch (e) {
+					console.error('⛔ showOsdExtras: error fetching metadata', e);
+					if (versionEl) versionEl.textContent = '(Error loading metadata)';
+				  }
 
-					// ─── Create or update new media info block ───────────────
-					let mediaInfoEl = jellyfin.document.getElementById('osdMediaInfo');
-					if (!mediaInfoEl) {
-						mediaInfoEl = jellyfin.document.createElement('div');
-						mediaInfoEl.id = 'osdMediaInfo';
-						Object.assign(mediaInfoEl.style, {
-							position: 'fixed',
-							bottom: '6.5em',
-							left: '12px',
-							fontFamily: 'Inter, sans-serif',
-							fontSize: '14pt',
-							fontWeight: '600',
-							color: 'var(--md-sys-color-tertiary)',
-							backgroundColor: 'rgba(0,0,0,0.5)',
-							padding: '6px 10px',
-							borderRadius: '5px',
-							maxWidth: '70vw',
-							whiteSpace: 'pre-wrap',
-							zIndex: 997,
-							textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)'
-						});
-						jellyfin.document.body.appendChild(mediaInfoEl);
-					}
-					mediaInfoEl.classList.remove('osd-hidden');
-
-					// ─── Fetch metadata to populate media info and plot ──────
-					const versionEl = jellyfin.document.getElementById('osdMoreText');
-					if (itemId) {
-						const url = `/Items/${itemId}${apiKey ? `?api_key=${apiKey}` : ''}`;
-						fetch(url)
-							.then(res => res.json())
-							.then(data => {
-								// Plot text
-								if (versionEl) {
-									versionEl.textContent = data.Overview || '(No plot available)';
-								}
-
-								// Media info formatting
-								const streams = data.MediaStreams || [];
-								const videoStream = streams.find(s => s.Type === 'Video');
-								const audioStream = streams.find(s => s.Type === 'Audio');
-
-								const videoCodec    = videoStream?.Codec?.toUpperCase() || '?';
-								const aspectRatio   = videoStream?.AspectRatio || `${videoStream?.Width}x${videoStream?.Height}`;
-								const resolution    = videoStream?.Width && videoStream?.Height ? `${videoStream.Width}x${videoStream.Height}` : '?';
-
-								const audioCodec    = audioStream?.Codec?.toUpperCase() || '?';
-								const audioChannels = audioStream?.Channels || '?';
-
-								const date = data.PremiereDate ? new Date(data.PremiereDate) : null;
-								const formatDate = d => {
-									const day = d.getDate();
-									const suffix = (n) => (n > 3 && n < 21) ? 'th' : ['st','nd','rd'][((n % 10) - 1)] || 'th';
-									return `${d.toLocaleString('en-US', { month: 'long' })} ${day}${suffix(day)}, ${d.getFullYear()}`;
-								};
-								const airDate = date ? formatDate(date) : 'Unknown';
-
-								const summary = `${airDate} / ${videoCodec} / ${aspectRatio} / ${audioCodec} / ${audioChannels}ch / ${resolution}`;
-								mediaInfoEl.textContent = summary;
-							})
-							.catch(err => {
-								console.error('Error fetching plot or media info:', err);
-								if (versionEl) versionEl.textContent = '(Error loading metadata)';
-							});
-					}
-
-					// ─── ClearArt setup ──────────────────────────────────────
-					let clearArtEl = jellyfin.document.getElementById('osdClearArt');
-					if (!clearArtEl) {
-						clearArtEl = jellyfin.document.createElement('img');
-						clearArtEl.id = 'osdClearArt';
-						clearArtEl.classList.add('osd-hidden');
-						Object.assign(clearArtEl.style, {
-							position: 'fixed',
-							bottom: '5.7em',
-							right: '3em',
-							maxWidth: '500px',
-							maxHeight: '500px',
-							zIndex: 999,
-							pointerEvents: 'none'
-						});
-						jellyfin.document.body.appendChild(clearArtEl);
-					}
-
-					if (itemId) {
-						const metaUrl = `/Items/${itemId}${apiKey ? `?api_key=${apiKey}` : ''}`;
-						fetch(metaUrl)
-							.then(res => res.json())
-							.then(data => {
-								const artId = data.SeriesId || itemId;
-								clearArtEl.src = `/Items/${artId}/Images/Art${apiKey ? `?api_key=${apiKey}` : ''}`;
-								clearArtEl.classList.remove('osd-hidden');
-							})
-							.catch(err => console.error('Error fetching clearart:', err));
-					}
+				  // ─── ClearArt setup & fetch ───────────────────────────────────
+				  let clearArtEl = doc.getElementById('osdClearArt');
+				  if (!clearArtEl) {
+					clearArtEl = doc.createElement('img');
+					clearArtEl.id = 'osdClearArt';
+					clearArtEl.classList.add('osd-hidden');
+					Object.assign(clearArtEl.style, {
+					  position: 'fixed',
+					  bottom: '5.7em',
+					  right: '3em',
+					  maxWidth: '500px',
+					  maxHeight: '500px',
+					  zIndex: 999,
+					  pointerEvents: 'none'
+					});
+					doc.body.appendChild(clearArtEl);
+				  }
+				  try {
+					const artId = (await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
+									.then(r=>r.json())).SeriesId
+								 || itemId;
+					clearArtEl.src = `/Items/${artId}/Images/Art?api_key=${token}`;
+					clearArtEl.classList.remove('osd-hidden');
+				  } catch (e) {
+					console.error('⛔ showOsdExtras: error fetching clearart', e);
+				  }
 				}
-
 
                 // ───────────────────────────────────────────────────────────────────────────────
                 // NOW-PLAYING PAGE DETECTION & LOGO INJECTION
@@ -1108,7 +1144,6 @@
                     initializeFocus();
                 }
 
-				/*
                 window.addEventListener('hashchange', handleLocationChange);
                 window.addEventListener('popstate', handleLocationChange);
 
@@ -1118,7 +1153,6 @@
                     _pushState.apply(this, args);
                     handleLocationChange();
                 };
-				*/
 
                 // On “back” from nested navigation, reinitialize focus
                 function handleBack() {
