@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.8.1</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.8.2</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -434,7 +434,7 @@
 					)
 				  );
 
-				  // ─── Highlight the Pause button in “extras” mode ──────────────
+				  // ─── Highlight Pause button in “extras” mode ──────────────
 				  const btnPause = jellyfin.document.querySelector('button.btnPause');
 				  if (btnPause) {
 					btnPause.classList.add('osdExtrasMode');
@@ -446,13 +446,12 @@
 					}
 				  }
 
-				  // ─── Determine API key (token) & userId ───────────────────────
+				  // ─── Determine API token & userId ─────────────────────────────
 				  const doc = jellyfin.document;
 				  let initJson = null;
 				  const initEl = doc.getElementById('jellyfin-initialization-data');
 				  if (initEl) {
-					try { initJson = JSON.parse(initEl.textContent); }
-					catch {}
+					try { initJson = JSON.parse(initEl.textContent); } catch {}
 				  }
 				  let localCred = null;
 				  try {
@@ -462,9 +461,9 @@
 				  const token = initJson?.AccessToken
 							   || localCred?.Servers?.[0]?.AccessToken
 							   || (() => {
-									const video = doc.querySelector('video');
-									const src = video?.currentSrc || video?.src || '';
-									return src.match(/[?&]api_key=([^&]+)/i)?.[1] || null;
+									const v = doc.querySelector('video');
+									const s = v?.currentSrc || v?.src || '';
+									return s.match(/[?&]api_key=([^&]+)/i)?.[1] || null;
 								  })();
 				  const userId = initJson?.User?.Id || localCred?.Servers?.[0]?.UserId;
 				  if (!token) {
@@ -526,42 +525,93 @@
 				  mediaInfoEl.classList.remove('osd-hidden');
 
 				  const versionEl = doc.getElementById('osdMoreText');
-				  if (versionEl) versionEl.classList.remove('osd-hidden');
 
-				  // ─── Fetch metadata (Overview, MediaStreams, SeriesId) ────────
-				  try {
-					const fields = ['Overview','MediaStreams','SeriesId'].join(',');
-					const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
-					const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
-					const data = await metaRes.json();
+// ─── Fetch metadata (Overview, MediaStreams, SeriesId, PremiereDate) ─────────
+try {
+  const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
+  const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
+  const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
+  const data    = await metaRes.json();
 
-					// Plot / overview
-					if (versionEl) {
-					  versionEl.textContent = data.Overview || '(No plot available)';
-					}
+  // Plot / overview (unchanged)
+  if (versionEl) {
+    if (data.Overview) {
+      versionEl.textContent = data.Overview;
+      versionEl.classList.remove('osd-hidden');
+    } else {
+      versionEl.classList.add('osd-hidden');
+    }
+  }
 
-					// Media streams summary
-					const streams = data.MediaStreams || [];
-					const vs = streams.find(s => s.Type==='Video') || {};
-					const as = streams.find(s => s.Type==='Audio') || {};
-					const videoCodec  = (vs.Codec||'?').toUpperCase();
-					const aspectRatio = vs.AspectRatio || (vs.Width&&vs.Height?`${vs.Width}x${vs.Height}`:'?');
-					const resolution  = vs.Width&&vs.Height?`${vs.Width}x${vs.Height}`:'?';
-					const audioCodec  = (as.Codec||'?').toUpperCase();
-					const audioCh     = as.Channels || '?';
-					let airDate = 'Unknown';
-					if (data.PremiereDate) {
-					  const d = new Date(data.PremiereDate);
-					  const day = d.getDate();
-					  const suffix = (n=>(n>3&&n<21)?'th':['st','nd','rd'][((n%10)-1)]||'th')(day);
-					  airDate = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
-					}
-					mediaInfoEl.textContent =
-					  `${airDate} / ${videoCodec} / ${aspectRatio} / ${audioCodec} / ${audioCh}ch / ${resolution}`;
-				  } catch (e) {
-					console.error('⛔ showOsdExtras: error fetching metadata', e);
-					if (versionEl) versionEl.textContent = '(Error loading metadata)';
-				  }
+  // ─── Media streams summary ────────────────────────────────────────
+  const streams     = data.MediaStreams || [];
+  const vs          = streams.find(s => s.Type === 'Video') || {};
+  const as          = streams.find(s => s.Type === 'Audio') || {};
+  const videoCodec  = (vs.Codec || '?').toUpperCase();
+  const aspectRatio = vs.AspectRatio || (vs.Width && vs.Height ? `${vs.Width}x${vs.Height}` : '?');
+  const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
+
+  // ─── Format the air/release date ───────────────────────────────────
+  let airDate = 'Unknown';
+  if (data.PremiereDate) {
+    const d      = new Date(data.PremiereDate);
+    const day    = d.getDate();
+    const suffix = (n => (n>3 && n<21) ? 'th' : ['st','nd','rd'][((n%10)-1)] || 'th')(day);
+    airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
+  }
+
+  // ─── Fetch Rating & Genre from series (or item) ────────────────────
+  let rating = '';
+  let genre  = '';
+  const sourceId = data.SeriesId || itemId;
+  try {
+    const rgFields = ['OfficialRating','Genres'].join(',');
+    const rgUrl    = `/Items/${sourceId}?fields=${rgFields}&api_key=${token}`;
+    const rgRes    = await fetch(rgUrl, { credentials: 'same-origin' });
+    const rgData   = await rgRes.json();
+    if (typeof rgData.OfficialRating === 'string') {
+      rating = rgData.OfficialRating.startsWith('Rated')
+        ? rgData.OfficialRating
+        : `Rated ${rgData.OfficialRating}`;
+    }
+    if (Array.isArray(rgData.Genres) && rgData.Genres.length) {
+      genre = rgData.Genres[0];
+    }
+  } catch (err) {
+    console.warn('Could not fetch rating/genre for series', err);
+  }
+
+  // ─── Map audio codecs ──────────────────────────────────────────────
+  const audioCodecRaw = (as.Codec || '?').toUpperCase();
+  const audioCh       = as.Channels || '?';
+  const codecMap      = {
+    'AC3':    'Dolby Digital',
+    'E-AC3':  'Dolby Digital Plus',
+    'TRUEHD': 'Dolby TrueHD'
+  };
+  const audioName = codecMap[audioCodecRaw] || audioCodecRaw;
+
+  // ─── Assemble and render the OSD info line ────────────────────────
+  const parts = [];
+  if (rating) parts.push(rating);
+  if (genre)  parts.push(genre);
+  parts.push(
+    airDate,
+    resolution,
+    videoCodec,
+    aspectRatio,
+    audioName,
+    `${audioCh}ch`
+  );
+  mediaInfoEl.textContent = parts.join(' / ');
+} catch (e) {
+  console.error('⛔ showOsdExtras: error fetching metadata', e);
+  if (versionEl) {
+    versionEl.textContent = '(Error loading metadata)';
+    versionEl.classList.remove('osd-hidden');
+  }
+}
+
 
 				  // ─── ClearArt setup & fetch ───────────────────────────────────
 				  let clearArtEl = doc.getElementById('osdClearArt');
@@ -569,6 +619,7 @@
 					clearArtEl = doc.createElement('img');
 					clearArtEl.id = 'osdClearArt';
 					clearArtEl.classList.add('osd-hidden');
+					clearArtEl.onerror = () => clearArtEl.classList.add('osd-hidden');
 					Object.assign(clearArtEl.style, {
 					  position: 'fixed',
 					  bottom: '5.7em',
@@ -580,16 +631,20 @@
 					});
 					doc.body.appendChild(clearArtEl);
 				  }
+
 				  try {
-					const artId = (await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
-									.then(r=>r.json())).SeriesId
-								 || itemId;
+					// Try Series-level art, fallback to item-level
+					const artMeta = await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
+									   .then(r => r.json());
+					const artId = artMeta.SeriesId || itemId;
 					clearArtEl.src = `/Items/${artId}/Images/Art?api_key=${token}`;
 					clearArtEl.classList.remove('osd-hidden');
 				  } catch (e) {
 					console.error('⛔ showOsdExtras: error fetching clearart', e);
+					clearArtEl.classList.add('osd-hidden');
 				  }
 				}
+
 
                 // ───────────────────────────────────────────────────────────────────────────────
                 // NOW-PLAYING PAGE DETECTION & LOGO INJECTION
