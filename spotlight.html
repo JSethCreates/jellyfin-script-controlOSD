@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.8.2</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.8.4</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -23,7 +23,8 @@
                 // ───────────────────────────────────────────────────────────────────────────────
                 // GLOBAL VARIABLES & STATE
                 // ───────────────────────────────────────────────────────────────────────────────
-                let isInitialized      = false;
+                let locationChangeTimer;
+				let isInitialized      = false;
                 let currentLocation    = '';
                 let previousElement    = null;
                 let mutationObserver   = null;
@@ -187,7 +188,7 @@
                 // STYLE INJECTION (TV MODE [REMOTE CONTROL] SIMULATION AND OTHER ADJUSTMENTS)
                 // ───────────────────────────────────────────────────────────────────────────────
 
-                function addStyles(doc, isIframe = false, highlightColor = '#4edad3') {
+                function addStyles(doc, isIframe = false, highlightColor) {
                     if (doc.getElementById('tv-nav-styles')) return;
 
                     const style = doc.createElement('style');
@@ -506,11 +507,11 @@
 					mediaInfoEl.id = 'osdMediaInfo';
 					Object.assign(mediaInfoEl.style, {
 					  position: 'fixed',
-					  bottom: '6.5em',
+					  bottom: '4.7em',
 					  left: '12px',
 					  fontFamily: 'Inter, sans-serif',
-					  fontSize: '14pt',
-					  fontWeight: '600',
+					  fontSize: '16pt',
+					  fontWeight: '900',
 					  color: 'var(--md-sys-color-tertiary)',
 					  backgroundColor: 'rgba(0,0,0,0.5)',
 					  padding: '6px 10px',
@@ -518,7 +519,7 @@
 					  maxWidth: '70vw',
 					  whiteSpace: 'pre-wrap',
 					  zIndex: 997,
-					  textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)'
+					  textShadow: '2px 2px 2px rgba(0, 0, 0, 0.8)'
 					});
 					doc.body.appendChild(mediaInfoEl);
 				  }
@@ -526,91 +527,109 @@
 
 				  const versionEl = doc.getElementById('osdMoreText');
 
-// ─── Fetch metadata (Overview, MediaStreams, SeriesId, PremiereDate) ─────────
-try {
-  const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
-  const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
-  const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
-  const data    = await metaRes.json();
+				// ─── Fetch metadata (Overview, MediaStreams, SeriesId, PremiereDate) ─────────
+				try {
+				  const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
+				  const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
+				  const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
+				  const data    = await metaRes.json();
 
-  // Plot / overview (unchanged)
-  if (versionEl) {
-    if (data.Overview) {
-      versionEl.textContent = data.Overview;
-      versionEl.classList.remove('osd-hidden');
-    } else {
-      versionEl.classList.add('osd-hidden');
-    }
-  }
+				  // Plot / overview (unchanged)
+				  if (versionEl) {
+					if (data.Overview) {
+					  versionEl.textContent = data.Overview;
+					  versionEl.classList.remove('osd-hidden');
+					} else {
+					  versionEl.classList.add('osd-hidden');
+					}
+				  }
 
-  // ─── Media streams summary ────────────────────────────────────────
-  const streams     = data.MediaStreams || [];
-  const vs          = streams.find(s => s.Type === 'Video') || {};
-  const as          = streams.find(s => s.Type === 'Audio') || {};
-  const videoCodec  = (vs.Codec || '?').toUpperCase();
-  const aspectRatio = vs.AspectRatio || (vs.Width && vs.Height ? `${vs.Width}x${vs.Height}` : '?');
-  const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
+				  // ─── Media streams summary ────────────────────────────────────────
+				  const streams     = data.MediaStreams || [];
+				  const vs          = streams.find(s => s.Type === 'Video') || {};
+				  const as          = streams.find(s => s.Type === 'Audio') || {};
+				  const videoCodec  = (vs.Codec || '?').toUpperCase();
+				  const aspectRatio = vs.AspectRatio || (vs.Width && vs.Height ? `${vs.Width}x${vs.Height}` : '?');
+				  const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
 
-  // ─── Format the air/release date ───────────────────────────────────
-  let airDate = 'Unknown';
-  if (data.PremiereDate) {
-    const d      = new Date(data.PremiereDate);
-    const day    = d.getDate();
-    const suffix = (n => (n>3 && n<21) ? 'th' : ['st','nd','rd'][((n%10)-1)] || 'th')(day);
-    airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
-  }
+				  // ─── Format the air/release date ───────────────────────────────────
+				  let airDate = 'Unknown';
+				  if (data.PremiereDate) {
+					const d      = new Date(data.PremiereDate);
+					const day    = d.getDate();
+					const suffix = (n => (n>3 && n<21) ? 'th' : ['st','nd','rd'][((n%10)-1)] || 'th')(day);
+					airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
+				  }
 
-  // ─── Fetch Rating & Genre from series (or item) ────────────────────
-  let rating = '';
-  let genre  = '';
-  const sourceId = data.SeriesId || itemId;
-  try {
-    const rgFields = ['OfficialRating','Genres'].join(',');
-    const rgUrl    = `/Items/${sourceId}?fields=${rgFields}&api_key=${token}`;
-    const rgRes    = await fetch(rgUrl, { credentials: 'same-origin' });
-    const rgData   = await rgRes.json();
-    if (typeof rgData.OfficialRating === 'string') {
-      rating = rgData.OfficialRating.startsWith('Rated')
-        ? rgData.OfficialRating
-        : `Rated ${rgData.OfficialRating}`;
-    }
-    if (Array.isArray(rgData.Genres) && rgData.Genres.length) {
-      genre = rgData.Genres[0];
-    }
-  } catch (err) {
-    console.warn('Could not fetch rating/genre for series', err);
-  }
+				 // ─── Fetch Rating, Genre, Studio from series (or item) ──────────────
+				let rating = '';
+				let genre  = '';
+				let studio = '';
+				const sourceId = data.SeriesId || itemId;
+				try {
+				  const rgFields = ['OfficialRating','Genres','Studios'].join(',');
+				  const rgUrl    = `/Items/${sourceId}?fields=${rgFields}&api_key=${token}`;
+				  const rgRes    = await fetch(rgUrl, { credentials: 'same-origin' });
+				  const rgData   = await rgRes.json();
 
-  // ─── Map audio codecs ──────────────────────────────────────────────
-  const audioCodecRaw = (as.Codec || '?').toUpperCase();
-  const audioCh       = as.Channels || '?';
-  const codecMap      = {
-    'AC3':    'Dolby Digital',
-    'E-AC3':  'Dolby Digital Plus',
-    'TRUEHD': 'Dolby TrueHD'
-  };
-  const audioName = codecMap[audioCodecRaw] || audioCodecRaw;
+				  if (typeof rgData.OfficialRating === 'string') {
+					rating = rgData.OfficialRating.startsWith('Rated')
+					  ? rgData.OfficialRating
+					  : `Rated ${rgData.OfficialRating}`;
+				  }
 
-  // ─── Assemble and render the OSD info line ────────────────────────
-  const parts = [];
-  if (rating) parts.push(rating);
-  if (genre)  parts.push(genre);
-  parts.push(
-    airDate,
-    resolution,
-    videoCodec,
-    aspectRatio,
-    audioName,
-    `${audioCh}ch`
-  );
-  mediaInfoEl.textContent = parts.join(' / ');
-} catch (e) {
-  console.error('⛔ showOsdExtras: error fetching metadata', e);
-  if (versionEl) {
-    versionEl.textContent = '(Error loading metadata)';
-    versionEl.classList.remove('osd-hidden');
-  }
-}
+				  if (Array.isArray(rgData.Genres) && rgData.Genres.length) {
+					genre = rgData.Genres[0];
+				  }
+
+				  if (Array.isArray(rgData.Studios) && rgData.Studios.length && typeof rgData.Studios[0].Name === 'string') {
+					studio = rgData.Studios[0].Name.trim();
+				  }
+				} catch (err) {
+				  console.warn('Could not fetch studio/genre/rating for series', err);
+				}
+
+				  // ─── Map audio codecs ──────────────────────────────────────────────
+				  const audioCodecRaw = (as.Codec || '?').toUpperCase();
+				  const audioCh       = as.Channels || '?';
+				  const codecMap      = {
+					'AC3':    'Dolby Digital',
+					'E-AC3':  'Dolby Digital Plus',
+					'TRUEHD': 'Dolby TrueHD'
+				  };
+				  const audioName = codecMap[audioCodecRaw] || audioCodecRaw;
+
+				  // ─── Assemble and render the OSD info line ────────────────────────
+				  const parts = [];
+				  // Ordered: Genre / [Rating] / Air Date / Video Info
+					if (studio) {
+					  parts.push(studio);
+					}
+					
+					if (typeof genre === 'string' && genre.trim()) {
+					  parts.push(genre.trim());
+					}
+
+					if (typeof rating === 'string' && rating.trim()) {
+					  parts.push(`[${rating.trim()}]`);
+					}
+
+				  parts.push(
+					airDate,
+					resolution,
+					videoCodec,
+					aspectRatio,
+					audioName,
+					`${audioCh}ch`
+				  );
+				  mediaInfoEl.textContent = parts.join(' / ');
+				} catch (e) {
+				  console.error('⛔ showOsdExtras: error fetching metadata', e);
+				  if (versionEl) {
+					versionEl.textContent = '(Error loading metadata)';
+					versionEl.classList.remove('osd-hidden');
+				  }
+				}
 
 
 				  // ─── ClearArt setup & fetch ───────────────────────────────────
@@ -624,7 +643,7 @@ try {
 					  position: 'fixed',
 					  bottom: '5.7em',
 					  right: '3em',
-					  maxWidth: '500px',
+					  maxWidth: '30vw',
 					  maxHeight: '500px',
 					  zIndex: 999,
 					  pointerEvents: 'none'
@@ -675,7 +694,11 @@ try {
                                 background-color: rgba(0, 0, 0, 0.7);
                                 padding: 8px 12px;
                                 border-radius: 6px;
-                                max-width: 65vw;
+								display: -webkit-box;
+								-webkit-box-orient: vertical;
+								-webkit-line-clamp: 5;
+								overflow: hidden;
+                                max-width: 62vw;
                                 white-space: pre-wrap;
                                 word-wrap: break-word;
                                 text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
@@ -1188,17 +1211,28 @@ try {
                 // ───────────────────────────────────────────────────────────────────────────────
 
                 function handleLocationChange() {
-                    if (previousElement) {
-                        previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-                    }
-                    focusableElements = [];
-                    currentRow = -1;
-                    currentCol = -1;
-                    previousElement = null;
-                    updateFocusableElements();
-                    initializeFocus();
-                }
+				  // cancel any pending run
+				  clearTimeout(locationChangeTimer);
 
+				  // throttle: wait 100 ms before re-initializing focus
+				  locationChangeTimer = setTimeout(() => {
+					// if you need to clear any previous focus state, do it here:
+					// previousElement = null;
+
+					updateFocusableElements();
+					initializeFocus();
+				  }, 100);
+				}
+
+				/* then hook it up as before:
+				window.addEventListener('hashchange',   handleLocationChange);
+				window.addEventListener('popstate',     handleLocationChange);
+				history.pushState = function(...args) {
+				  originalPush.apply(this, args);
+				  handleLocationChange();
+				};
+				
+				
                 window.addEventListener('hashchange', handleLocationChange);
                 window.addEventListener('popstate', handleLocationChange);
 
@@ -1208,6 +1242,7 @@ try {
                     _pushState.apply(this, args);
                     handleLocationChange();
                 };
+				*/
 
                 // On “back” from nested navigation, reinitialize focus
                 function handleBack() {
@@ -1239,7 +1274,7 @@ try {
                     }
                 }
 
-                setInterval(checkNav, 1250);
+                setInterval(checkNav, 250);
 
                 // ───────────────────────────────────────────────────────────────────────────────
                 // INITIALIZATION
@@ -1289,7 +1324,7 @@ try {
                     isInitialized = true;
                     // Force one more update of focusable elements after 2 seconds (fallback)
                     setTimeout(() => {
-                        console.log('↪ Forcing fallback update of focusable elements (.1s post-init)');
+                        console.log('↪ Forcing fallback update of focusable elements (0.1s post-init)');
                         updateFocusableElements();
                     }, 100);
                 }
