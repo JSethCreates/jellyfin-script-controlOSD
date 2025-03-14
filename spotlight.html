@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.9.0</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.9.3</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -189,18 +189,17 @@
                 // ───────────────────────────────────────────────────────────────────────────────
 
                 function addStyles(doc, isIframe = false, highlightColor) {
-                    if (!doc.head) {
-						// Retry once the head exists
-						doc.addEventListener('DOMContentLoaded', () => {
-						  addStyles(doc, isIframe, highlightColor);
-						}, { once: true });
-						return;
-					  }
 					if (doc.getElementById('tv-nav-styles')) return;
 
-                    const style = doc.createElement('style');
-                    style.id = 'tv-nav-styles';
+					const injectTarget2 = doc.head || doc.documentElement;
+					if (!injectTarget2) {
+						// Retry after a short delay
+						setTimeout(() => addStyles(doc, isIframe, highlightColor), 50);
+						return;
+					}
 
+					const style = doc.createElement('style');
+					style.id = 'tv-nav-styles';
                     // Box-shadow for focus in main document vs. iframe
                     const boxShadowColor = hexToRgba(highlightColor, 0.5);
 
@@ -243,7 +242,7 @@
 													
                         /* Override the default Jellyfin page title asset */
                         .pageTitleWithDefaultLogo {
-                            background-image: url(/assets/img/icon-transparent.png) !important;
+                            background-image: url(/web/assets/img/icon-transparent.png) !important;
                         }
 						/* Reposition the video slider in OSD */
                         .sliderContainer {
@@ -386,34 +385,26 @@
                             z-index: 3 !important;
                         }
                     `;
-                    doc.head.appendChild(style);
+                    const injectTarget = doc.head || doc.documentElement;
+					injectTarget.appendChild(style);
                 }
 
                 // Inject hover styles for Spotlight Mod iframes
                 function injectIframeHoverStyles(doc) {
-				  // If <head> isn’t there yet, wait for DOMContentLoaded and retry once
-				  if (!doc.head) {
-					doc.addEventListener('DOMContentLoaded', () => {
-					  injectIframeHoverStyles(doc);
-					}, { once: true });
-					return;
-				  }
-				  // If we’ve already injected, do nothing
-				  if (doc.getElementById('iframe-hover-styles')) return;
+                    if (doc.getElementById('iframe-hover-styles')) return;
+                    const style = doc.createElement('style');
+                    style.id = 'iframe-hover-styles';
+                    style.textContent = `
+                        .slide.hover .logo {
+                            transform: translateY(-50%) translateX(-50%) scale(1.35) !important;
+                            opacity: 0.1 !important;
+                        }
+                        .slide.hover .lorem-ipsum { opacity: 1; }
+                    `;
+                    const injectTarget = doc.head || doc.documentElement;
+					injectTarget.appendChild(style);
+                }
 
-				  const style = doc.createElement('style');
-				  style.id = 'iframe-hover-styles';
-				  style.textContent = `
-					.slide.hover .logo {
-					  transform: translateY(-50%) translateX(-50%) scale(1.35) !important;
-					  opacity: 0.1 !important;
-					}
-					.slide.hover .lorem-ipsum { opacity: 1; }
-				  `;
-
-				  // Now that head is guaranteed to exist, this won’t throw
-				  doc.head.appendChild(style);
-				}
                 // Toggle “hover” class inside a featured iframe
                 function toggleHover(doc, add = true) {
                     const slide = doc.querySelector('.slide');
@@ -609,18 +600,12 @@
 				  // ─── Map audio codecs ──────────────────────────────────────────────
 				  const audioCodecRaw = (as.Codec || '?').toUpperCase();
 				  const audioCh       = as.Channels || '?';
-				  const normalizedCodec = audioCodecRaw.replace(/[^A-Z0-9]/g, '');
-					const codecMap = {
-					  'AC3':     'Dolby Digital',
-					  'EAC3':    'Dolby Digital Plus',
-					  'TRUEHD':  'Dolby TrueHD',
-					  'DTS':     'DTS',
-					  'DTSHD':   'DTS-HD',
-					  'MP3':     'MP3',
-					  'AAC':     'AAC',
-					  'FLAC':    'FLAC'
-					};
-					const audioName = codecMap[normalizedCodec] || audioCodecRaw;
+				  const codecMap      = {
+					'AC3':    'Dolby Digital',
+					'EAC3':  'Dolby Digital Plus',
+					'TRUEHD': 'Dolby TrueHD'
+				  };
+				  const audioName = codecMap[audioCodecRaw] || audioCodecRaw;
 
 				  // ─── Assemble and render the OSD info line ────────────────────────
 				  const parts = [];
@@ -756,18 +741,21 @@
                         if (!osdExtrasActive) hideOsdExtras();
 
                         // Observe the bottom OSD container to hide extras when OSD disappears
-                        const osdBottom = jellyfin.document.querySelector('.videoOsdBottom');
-                        if (osdBottom) {
-                            const observer = new MutationObserver(() => {
-                                const hidden = osdBottom.classList.contains('videoOsdBottom-hidden')
-                                            || osdBottom.classList.contains('hide');
-                                if (hidden && osdExtrasActive) {
-                                    hideOsdExtras();
-                                    osdExtrasActive = false;
-                                }
-                            });
-                            observer.observe(osdBottom, { attributes: true, attributeFilter: ['class'] });
-                        }
+						const osdBottom = jellyfin.document.querySelector('.videoOsdBottom');
+						if (osdBottom) {
+							const observer = new MutationObserver(() => {
+								const hidden = osdBottom.classList.contains('videoOsdBottom-hidden')
+											|| osdBottom.classList.contains('hide');
+								if (hidden && osdExtrasActive) {
+									// wait 3 seconds before hiding extras
+									setTimeout(() => {
+										hideOsdExtras();
+										osdExtrasActive = false;
+									}, 3000);
+								}
+							});
+							observer.observe(osdBottom, { attributes: true, attributeFilter: ['class'] });
+						}
 
                         // ─── Inject “parent-show-logo” once per video page ────────────────
                         (function() {
@@ -857,8 +845,12 @@
                         if (el.classList.contains('featurediframe') && isElementVisible(el)) {
                             const iframeDoc = el.contentDocument || el.contentWindow.document;
                             if (iframeDoc) {
-                                addStyles(iframeDoc, true);
-                                injectIframeHoverStyles(iframeDoc);
+							// grab the same highlightColor you use for the main doc
+							const parentColor = getComputedStyle(jellyfin.document.documentElement)
+													.getPropertyValue('--highlight-color')
+													.trim();
+							addStyles(iframeDoc, true, parentColor);
+							injectIframeHoverStyles(iframeDoc);
                                 Array.from(iframeDoc.querySelectorAll('[tabindex="0"]'))
                                     .filter(isElementVisible)
                                     .forEach(innerEl => {
@@ -884,70 +876,135 @@
                         return a.left - b.left;
                     });
 
-                    // Group into rows with a threshold
-                    const grid = [], threshold = 50;
-                    let row = [], lastTop = -1;
-                    processed.forEach(item => {
-                        if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
-                            if (row.length) grid.push(row);
-                            row = [item.element];
-                            lastTop = item.top;
-                        } else {
-                            row.push(item.element);
-                        }
-                    });
-                    if (row.length) grid.push(row);
+                    // Group into rows with a threshold - Force header buttons to be processed as one row
+					const grid = [], headerRow = [], otherRows = [], threshold = 50;
+					let row = [], lastTop = -1;
 
+					processed.forEach(item => {
+						const el = item.element;
+
+						const isTrueHeaderButton = (
+							el.closest('.headerLeft') ||
+							el.closest('.headerRight') ||
+							el.closest('.emby-tabs-slider')
+						);
+
+						if (isTrueHeaderButton) {
+							headerRow.push(el);
+						} else {
+							if (lastTop === -1 || Math.abs(item.top - lastTop) > threshold) {
+								if (row.length) otherRows.push(row);
+								row = [el];
+								lastTop = item.top;
+							} else {
+								row.push(el);
+							}
+						}
+					});
+					if (row.length) otherRows.push(row);
+					if (headerRow.length) {
+						headerRow.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+						grid.push(headerRow);
+					}
+					grid.push(...otherRows);
                     focusableElements = grid;
                 }
 
-                function moveFocus(dr, dc) {
-                    if (!focusableElements.length) return;
-                    let nr = currentRow + dr, nc = currentCol + dc;
-                    if (nr < 0 || nr >= focusableElements.length) return;
-                    if (nc < 0) nc = focusableElements[nr].length - 1;
-                    else if (nc >= focusableElements[nr].length) nc = 0;
+				function moveFocus(dr, dc) {
+					// If there’s nothing at all to focus, bail
+					if (!focusableElements.length) return;
 
-                    const newEl = focusableElements[nr] ? focusableElements[nr][nc] : null;
-                    if (!newEl) return;
+					// Make sure currentRow is valid
+					if (currentRow < 0 || currentRow >= focusableElements.length) {
+						// If we lose our “row” (e.g. after a quick navigation), re‐initialize
+						initializeFocus();
+						return;
+					}
 
-                    console.log('Focus moved to:', describe(newEl));
+					// Handle vertical movement
+					if (dr === 1 || dr === -1) {
+						const rowArr = focusableElements[currentRow];
+						// If our current column is out of bounds, re‐init
+						if (!rowArr || currentCol < 0 || currentCol >= rowArr.length) {
+							initializeFocus();
+							return;
+						}
+						const currentEl = rowArr[currentCol];
+						if (!currentEl) return;
+						const rect = currentEl.getBoundingClientRect();
 
-                    // Remove highlight from previous
-                    if (previousElement) {
-                        previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-                        if (previousElement.classList.contains('clickable-overlay')) {
-                            const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                            if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
-                        }
-                    }
-                    if (previousElement?.id === 'mediaButton') {
-                        const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                        if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
-                    }
+						let best = null, bestDelta = Infinity;
+						focusableElements.forEach((row, ri) => {
+							row.forEach((el, ci) => {
+								const r = el.getBoundingClientRect();
+								const deltaY = r.top - rect.top;
+								const deltaX = Math.abs(r.left - rect.left);
+								const goingDown = dr === 1;
+								if ((goingDown && deltaY > 10) || (!goingDown && deltaY < -10)) {
+									const totalDist = Math.abs(deltaY) + deltaX;
+									if (totalDist < bestDelta) {
+										best = { r: ri, c: ci };
+										bestDelta = totalDist;
+									}
+								}
+							});
+						});
 
-                    // Highlight new element
-                    newEl.classList.add('keyboard-nav-highlight');
-                    if (newEl.classList.contains('emby-scrollbuttons-button')) {
-                        newEl.classList.add('highlight-chevron');
-                    }
-                    scrollIntoView(newEl);
+						if (best) {
+							currentRow = best.r;
+							currentCol = best.c;
+						} else {
+							return; // no candidate found
+						}
+					}
+					// Handle horizontal movement
+					else {
+						const rowArr = focusableElements[currentRow];
+						if (!rowArr) {
+							initializeFocus();
+							return;
+						}
+						let nc = currentCol + dc;
+						if (nc < 0) nc = rowArr.length - 1;
+						else if (nc >= rowArr.length) nc = 0;
+						currentCol = nc;
+					}
 
-                    // If it’s a clickable overlay inside a featured iframe, trigger hover state
-                    if (newEl.classList.contains('clickable-overlay')) {
-                        const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                        if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
-                    }
-                    if (newEl.id === 'mediaButton') {
-                        const iframe = jellyfin.document.querySelector('iframe.featurediframe');
-                        if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
-                    }
+					// Now that currentRow/currentCol are valid, grab the new element
+					const newEl = focusableElements[currentRow]?.[currentCol];
+					if (!newEl) return;
 
-                    currentRow = nr;
-                    currentCol = nc;
-                    previousElement = newEl;
-                }
-				
+					console.log('Focus moved to:', describe(newEl));
+
+					// Remove the old highlight
+					if (previousElement) {
+						previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+						if (previousElement.classList.contains('clickable-overlay')) {
+							const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+							if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+						}
+					}
+					if (previousElement?.id === 'mediaButton') {
+						const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+						if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
+					}
+
+					// Add the new highlight
+					newEl.classList.add('keyboard-nav-highlight');
+					if (newEl.classList.contains('emby-scrollbuttons-button')) {
+						newEl.classList.add('highlight-chevron');
+					}
+					scrollIntoView(newEl);
+
+					// If it’s an iframe overlay or the mediaButton, force the hover state
+					if (newEl.classList.contains('clickable-overlay') || newEl.id === 'mediaButton') {
+						const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+						if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
+					}
+
+					previousElement = newEl;
+				}
+
                 function initializeFocus() {
                     checkNowPlayingMode();
                     updateFocusableElements();
@@ -1182,7 +1239,7 @@
 				  }, 100);
 				}
 
-				/* then hook it up as before:
+				/* then hook it up as before:*/
 				window.addEventListener('hashchange',   handleLocationChange);
 				window.addEventListener('popstate',     handleLocationChange);
 				history.pushState = function(...args) {
@@ -1200,7 +1257,7 @@
                     _pushState.apply(this, args);
                     handleLocationChange();
                 };
-				*/
+				
 
                 // On “back” from nested navigation, reinitialize focus
                 function handleBack() {
@@ -1232,7 +1289,7 @@
                     }
                 }
 
-                setInterval(checkNav, 250);
+                setInterval(checkNav, 1250);
 
                 // ───────────────────────────────────────────────────────────────────────────────
                 // INITIALIZATION
@@ -1254,7 +1311,7 @@
                     }
                     mutationObserver = new MutationObserver(() => {
                         checkNowPlayingMode();
-                        if (usingKeyboardNav && !skipFocusReset) {
+                        if (!usingKeyboardNav && !skipFocusReset) {
                             updateFocusableElements();
                             if (isNavigating) {
                                 initializeFocus();
@@ -1284,7 +1341,7 @@
                     setTimeout(() => {
                         console.log('↪ Forcing fallback update of focusable elements (0.1s post-init)');
                         updateFocusableElements();
-                    }, 100);
+                    }, 1000);
                 }
 
                 // Called whenever a featured iframe loads
@@ -1301,7 +1358,7 @@
 
                 // Kick off the whole system
                 init();
-            }, 800);
+            }, 1000);
         }, { passive: true });
     </script>
 </head>
