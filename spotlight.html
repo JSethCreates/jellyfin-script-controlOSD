@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.9.3</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.9.4</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -435,242 +435,327 @@
 					if (mediaInfoEl) mediaInfoEl.classList.add('osd-hidden');
 				}
 
-				async function showOsdExtras() {
-				  // ─── Reveal all OSD elements ─────────────────────────────────
-				  osdElementsToHide.forEach(sel =>
-					jellyfin.document.querySelectorAll(sel).forEach(el =>
-					  el.classList.remove('osd-hidden')
-					)
-				  );
+async function showOsdExtras() {
+  // ─── Reveal all OSD elements ─────────────────────────────────
+  osdElementsToHide.forEach(sel =>
+    jellyfin.document.querySelectorAll(sel).forEach(el =>
+      el.classList.remove('osd-hidden')
+    )
+  );
 
-				  // ─── Highlight Pause button in “extras” mode ──────────────
-				  const btnPause = jellyfin.document.querySelector('button.btnPause');
-				  if (btnPause) {
-					btnPause.classList.add('osdExtrasMode');
-					if (isElementVisible(btnPause)) {
-					  btnPause.classList.add('keyboard-nav-highlight');
-					  scrollIntoView(btnPause);
-					  btnPause.focus();
-					  previousElement = btnPause;
-					}
-				  }
+  // ─── Highlight Pause button in “extras” mode ──────────────
+  const btnPause = jellyfin.document.querySelector('button.btnPause');
+  if (btnPause) {
+    btnPause.classList.add('osdExtrasMode');
+    if (isElementVisible(btnPause)) {
+      btnPause.classList.add('keyboard-nav-highlight');
+      scrollIntoView(btnPause);
+      btnPause.focus();
+      previousElement = btnPause;
+    }
+  }
 
-				  // ─── Determine API token & userId ─────────────────────────────
-				  const doc = jellyfin.document;
-				  let initJson = null;
-				  const initEl = doc.getElementById('jellyfin-initialization-data');
-				  if (initEl) {
-					try { initJson = JSON.parse(initEl.textContent); } catch {}
-				  }
-				  let localCred = null;
-				  try {
-					const raw = localStorage.getItem('jellyfin_credentials');
-					if (raw) localCred = JSON.parse(raw);
-				  } catch {}
-				  const token = initJson?.AccessToken
-							   || localCred?.Servers?.[0]?.AccessToken
-							   || (() => {
-									const v = doc.querySelector('video');
-									const s = v?.currentSrc || v?.src || '';
-									return s.match(/[?&]api_key=([^&]+)/i)?.[1] || null;
-								  })();
-				  const userId = initJson?.User?.Id || localCred?.Servers?.[0]?.UserId;
-				  if (!token) {
-					console.error('⛔ showOsdExtras: no API token found');
-					return;
-				  }
+  // ─── Determine API token & userId ─────────────────────────────
+  const doc = jellyfin.document;
+  let initJson = null;
+  const initEl = doc.getElementById('jellyfin-initialization-data');
+  if (initEl) {
+    try { initJson = JSON.parse(initEl.textContent); } catch {}
+  }
+  let localCred = null;
+  try {
+    const raw = localStorage.getItem('jellyfin_credentials');
+    if (raw) localCred = JSON.parse(raw);
+  } catch {}
+  const token = initJson?.AccessToken
+               || localCred?.Servers?.[0]?.AccessToken
+               || (() => {
+                    const v = doc.querySelector('video');
+                    const s = v?.currentSrc || v?.src || '';
+                    return s.match(/[?&]api_key=([^&]+)/i)?.[1] || null;
+                  })();
+  const userId = initJson?.User?.Id || localCred?.Servers?.[0]?.UserId;
+  if (!token) {
+    console.error('⛔ showOsdExtras: no API token found');
+    return;
+  }
 
-				  // ─── Determine the current itemId ─────────────────────────────
-				  const video = doc.querySelector('video');
-				  const src = video?.currentSrc || video?.src || '';
-				  let itemId = null;
-				  if (src && !src.startsWith('blob:')) {
-					itemId = src.match(/\/Videos\/([0-9a-f]{32})\//i)?.[1]
-						  || src.match(/mediaSourceId=([0-9a-f]{32})/i)?.[1];
-				  }
-				  if (!itemId) {
-					// fallback to Sessions lookup via api_key
-					console.log('🔄 showOsdExtras: falling back to /Sessions');
-					const deviceId = src.match(/[?&]deviceId=([^&]+)/i)?.[1];
-					try {
-					  const resp = await fetch(`/Sessions?api_key=${token}`, { credentials: 'same-origin' });
-					  const sessions = await resp.json();
-					  const session = sessions.find(s =>
-						(userId && s.UserId === userId) && (deviceId ? s.DeviceId === deviceId : true)
-					  ) || sessions.find(s => s.UserId === userId) || sessions[0];
-					  itemId = session?.NowPlayingItem?.Id || session?.NowViewingItem?.Id;
-					} catch (e) {
-					  console.error('⛔ showOsdExtras: error fetching sessions', e);
-					}
-				  }
-				  if (!itemId) {
-					console.error('⛔ showOsdExtras: unable to determine itemId');
-					return;
-				  }
+  // ─── Determine the current itemId ─────────────────────────────
+  const video = doc.querySelector('video');
+  const src = video?.currentSrc || video?.src || '';
+  let itemId = null;
+  if (src && !src.startsWith('blob:')) {
+    itemId = src.match(/\/Videos\/([0-9a-f]{32})\//i)?.[1]
+          || src.match(/mediaSourceId=([0-9a-f]{32})/i)?.[1];
+  }
+  if (!itemId) {
+    console.log('🔄 showOsdExtras: falling back to /Sessions');
+    const deviceId = src.match(/[?&]deviceId=([^&]+)/i)?.[1];
+    try {
+      const resp = await fetch(`/Sessions?api_key=${token}`, { credentials: 'same-origin' });
+      const sessions = await resp.json();
+      const session = sessions.find(s =>
+        (userId && s.UserId === userId) && (deviceId ? s.DeviceId === deviceId : true)
+      ) || sessions.find(s => s.UserId === userId) || sessions[0];
+      itemId = session?.NowPlayingItem?.Id || session?.NowViewingItem?.Id;
+    } catch (e) {
+      console.error('⛔ showOsdExtras: error fetching sessions', e);
+    }
+  }
+  if (!itemId) {
+    console.error('⛔ showOsdExtras: unable to determine itemId');
+    return;
+  }
 
-				  // ─── Ensure mediaInfo container exists ────────────────────────
-				  let mediaInfoEl = doc.getElementById('osdMediaInfo');
-				  if (!mediaInfoEl) {
-					mediaInfoEl = doc.createElement('div');
-					mediaInfoEl.id = 'osdMediaInfo';
-					Object.assign(mediaInfoEl.style, {
-					  position: 'fixed',
-					  bottom: '4.7em',
-					  left: '12px',
-					  fontFamily: 'Inter, sans-serif',
-					  fontSize: '16pt',
-					  fontWeight: '900',
-					  color: 'var(--md-sys-color-tertiary)',
-					  backgroundColor: 'rgba(0,0,0,0.5)',
-					  padding: '6px 10px',
-					  borderRadius: '5px',
-					  maxWidth: '70vw',
-					  whiteSpace: 'pre-wrap',
-					  zIndex: 997,
-					  textShadow: '2px 2px 2px rgba(0, 0, 0, 0.8)'
-					});
-					doc.body.appendChild(mediaInfoEl);
-				  }
-				  mediaInfoEl.classList.remove('osd-hidden');
+  // ─── Ensure mediaInfo container exists ────────────────────────
+  let mediaInfoEl = doc.getElementById('osdMediaInfo');
+  if (!mediaInfoEl) {
+    mediaInfoEl = doc.createElement('div');
+    mediaInfoEl.id = 'osdMediaInfo';
+    Object.assign(mediaInfoEl.style, {
+      position: 'fixed',
+      bottom: '4.7em',
+      left: '12px',
+      fontFamily: 'Inter, sans-serif',
+      fontSize: '16pt',
+      fontWeight: '900',
+      color: 'var(--md-sys-color-tertiary)',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      padding: '6px 10px',
+      borderRadius: '5px',
+      maxWidth: '70vw',
+      whiteSpace: 'pre-wrap',
+      zIndex: 997,
+      textShadow: '2px 2px 2px rgba(0, 0, 0, 0.8)'
+    });
+    doc.body.appendChild(mediaInfoEl);
+  }
+  mediaInfoEl.classList.remove('osd-hidden');
+  mediaInfoEl.innerHTML = ''; // clear previous
 
-				  const versionEl = doc.getElementById('osdMoreText');
+  const versionEl = doc.getElementById('osdMoreText');
 
-				// ─── Fetch metadata (Overview, MediaStreams, SeriesId, PremiereDate) ─────────
-				try {
-				  const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
-				  const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
-				  const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
-				  const data    = await metaRes.json();
+  try {
+    const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
+    const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
+    const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
+    const data    = await metaRes.json();
 
-				  // Plot / overview (unchanged)
-				  if (versionEl) {
-					if (data.Overview) {
-					  versionEl.textContent = data.Overview;
-					  versionEl.classList.remove('osd-hidden');
-					} else {
-					  versionEl.classList.add('osd-hidden');
-					}
-				  }
+    if (versionEl) {
+      if (data.Overview) {
+        versionEl.textContent = data.Overview;
+        versionEl.classList.remove('osd-hidden');
+      } else {
+        versionEl.classList.add('osd-hidden');
+      }
+    }
 
-				  // ─── Media streams summary ────────────────────────────────────────
-				  const streams     = data.MediaStreams || [];
-				  const vs          = streams.find(s => s.Type === 'Video') || {};
-				  const as          = streams.find(s => s.Type === 'Audio') || {};
-				  const videoCodec  = (vs.Codec || '?').toUpperCase();
-				  const aspectRatio = vs.AspectRatio || (vs.Width && vs.Height ? `${vs.Width}x${vs.Height}` : '?');
-				  const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
+    const streams     = data.MediaStreams || [];
+    const vs          = streams.find(s => s.Type === 'Video') || {};
+    const as          = streams.find(s => s.Type === 'Audio') || {};
+    const videoCodec  = (vs.Codec || '?').toUpperCase();
+    const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
+    const aspectRatio = vs.AspectRatio || resolution;
 
-				  // ─── Format the air/release date ───────────────────────────────────
-				  let airDate = 'Unknown';
-				  if (data.PremiereDate) {
-					const d      = new Date(data.PremiereDate);
-					const day    = d.getDate();
-					const suffix = (n => (n>3 && n<21) ? 'th' : ['st','nd','rd'][((n%10)-1)] || 'th')(day);
-					airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
-				  }
+    let airDate = 'Unknown';
+    if (data.PremiereDate) {
+      const d      = new Date(data.PremiereDate);
+      const day    = d.getDate();
+      const suffix = (n => (n>3 && n<21) ? 'th' : ['st','nd','rd'][((n%10)-1)] || 'th')(day);
+      airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
+    }
 
-				 // ─── Fetch Rating, Genre, Studio from series (or item) ──────────────
-				let rating = '';
-				let genre  = '';
-				let studio = '';
-				const sourceId = data.SeriesId || itemId;
-				try {
-				  const rgFields = ['OfficialRating','Genres','Studios'].join(',');
-				  const rgUrl    = `/Items/${sourceId}?fields=${rgFields}&api_key=${token}`;
-				  const rgRes    = await fetch(rgUrl, { credentials: 'same-origin' });
-				  const rgData   = await rgRes.json();
+    let rating = '', genre = '', studio = '';
+    const sourceId = data.SeriesId || itemId;
+    try {
+      const rgFields = ['OfficialRating','Genres','Studios'].join(',');
+      const rgUrl    = `/Items/${sourceId}?fields=${rgFields}&api_key=${token}`;
+      const rgRes    = await fetch(rgUrl, { credentials: 'same-origin' });
+      const rgData   = await rgRes.json();
+      if (typeof rgData.OfficialRating === 'string') {
+        rating = rgData.OfficialRating.startsWith('Rated')
+          ? rgData.OfficialRating
+          : `Rated ${rgData.OfficialRating}`;
+      }
+      if (Array.isArray(rgData.Genres) && rgData.Genres.length) {
+        genre = rgData.Genres[0];
+      }
+      if (Array.isArray(rgData.Studios) && rgData.Studios.length) {
+        studio = rgData.Studios[0].Name.trim();
+      }
+    } catch {}
 
-				  if (typeof rgData.OfficialRating === 'string') {
-					rating = rgData.OfficialRating.startsWith('Rated')
-					  ? rgData.OfficialRating
-					  : `Rated ${rgData.OfficialRating}`;
-				  }
-
-				  if (Array.isArray(rgData.Genres) && rgData.Genres.length) {
-					genre = rgData.Genres[0];
-				  }
-
-				  if (Array.isArray(rgData.Studios) && rgData.Studios.length && typeof rgData.Studios[0].Name === 'string') {
-					studio = rgData.Studios[0].Name.trim();
-				  }
-				} catch (err) {
-				  console.warn('Could not fetch studio/genre/rating for series', err);
-				}
-
-				  // ─── Map audio codecs ──────────────────────────────────────────────
-				  const audioCodecRaw = (as.Codec || '?').toUpperCase();
-				  const audioCh       = as.Channels || '?';
-				  const codecMap      = {
-					'AC3':    'Dolby Digital',
-					'EAC3':  'Dolby Digital Plus',
-					'TRUEHD': 'Dolby TrueHD'
-				  };
-				  const audioName = codecMap[audioCodecRaw] || audioCodecRaw;
-
-				  // ─── Assemble and render the OSD info line ────────────────────────
-				  const parts = [];
-				  // Ordered: Genre / [Rating] / Air Date / Video Info
-					if (studio) {
-					  parts.push(studio);
-					}
-					
-					if (typeof genre === 'string' && genre.trim()) {
-					  parts.push(genre.trim());
-					}
-
-					if (typeof rating === 'string' && rating.trim()) {
-					  parts.push(`[${rating.trim()}]`);
-					}
-
-				  parts.push(
-					airDate,
-					resolution,
-					videoCodec,
-					aspectRatio,
-					audioName,
-					`${audioCh}ch`
-				  );
-				  mediaInfoEl.textContent = parts.join(' / ');
-				} catch (e) {
-				  console.error('⛔ showOsdExtras: error fetching metadata', e);
-				  if (versionEl) {
-					versionEl.textContent = '(Error loading metadata)';
-					versionEl.classList.remove('osd-hidden');
-				  }
-				}
+    const audioCodecRaw   = (as.Codec || '?').toUpperCase();
+    const audioCh         = as.Channels || '?';
+    const normalizedCodec = audioCodecRaw.replace(/[^A-Z0-9]/g, '');
+    const codecMap        = {
+      'AC3': 'Dolby Digital',
+      'EAC3': 'Dolby Digital Plus',
+      'TRUEHD': 'Dolby TrueHD',
+      'DTS': 'DTS',
+      'DTSHD': 'DTS-HD',
+      'MP3': 'MP3',
+      'MPEG3': 'MP3',
+      'AAC': 'AAC',
+      'FLAC': 'FLAC'
+    };
+    const audioName = codecMap[normalizedCodec] || audioCodecRaw;
 
 
-				  // ─── ClearArt setup & fetch ───────────────────────────────────
-				  let clearArtEl = doc.getElementById('osdClearArt');
-				  if (!clearArtEl) {
-					clearArtEl = doc.createElement('img');
-					clearArtEl.id = 'osdClearArt';
-					clearArtEl.classList.add('osd-hidden');
-					clearArtEl.onerror = () => clearArtEl.classList.add('osd-hidden');
-					Object.assign(clearArtEl.style, {
-					  position: 'fixed',
-					  bottom: '5.7em',
-					  right: '3em',
-					  maxWidth: '30vw',
-					  maxHeight: '500px',
-					  zIndex: 999,
-					  pointerEvents: 'none'
-					});
-					doc.body.appendChild(clearArtEl);
-				  }
+    if (studio) {
+      const el = doc.createElement('span');
+      el.classList.add('osd-info-studio');
+      el.textContent = studio;
+      mediaInfoEl.appendChild(el);
+    }
+    if (genre) {
+      const el = doc.createElement('span');
+      el.classList.add('osd-info-genre');
+      el.textContent = genre;
+      mediaInfoEl.appendChild(el);
+    }
+    if (rating) {
+      const el = doc.createElement('span');
+      el.classList.add('osd-info-rating');
+      el.textContent = `[${rating}]`;
+      mediaInfoEl.appendChild(el);
+    }
 
-				  try {
-					// Try Series-level art, fallback to item-level
-					const artMeta = await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
-									   .then(r => r.json());
-					const artId = artMeta.SeriesId || itemId;
-					clearArtEl.src = `/Items/${artId}/Images/Art?api_key=${token}`;
-					clearArtEl.classList.remove('osd-hidden');
-				  } catch (e) {
-					console.error('⛔ showOsdExtras: error fetching clearart', e);
-					clearArtEl.classList.add('osd-hidden');
-				  }
-				}
+    const dateEl = doc.createElement('span');
+    dateEl.classList.add('osd-info-date');
+    dateEl.textContent = airDate;
+    mediaInfoEl.appendChild(dateEl);
+
+    const codecEl = doc.createElement('span');
+    codecEl.classList.add('osd-info-videoCodec');
+    codecEl.textContent = videoCodec;
+    mediaInfoEl.appendChild(codecEl);
+
+    const arContainer = doc.createElement('span');
+    arContainer.classList.add('osd-info-aspectContainer');
+    Object.assign(arContainer.style, {
+      display: 'inline-block',
+      position: 'relative',
+      width: '1.5em',
+      height: '1.5em',
+      margin: '0 0.2em'
+    });
+    const arImg = doc.createElement('img');
+	arImg.src = 'https://i.imgur.com/qida0rI.png';
+	arImg.style.height = '2.9em';
+	arImg.style.verticalAlign = 'bottom';
+	arImg.style.display = 'block';
+	arImg.style.position = 'relative';
+	arImg.style.top = '-0.55em';  // move icon up
+	arContainer.appendChild(arImg);
+
+	const arLabel = doc.createElement('span');
+	arLabel.textContent = aspectRatio;
+	Object.assign(arLabel.style, {
+	  position: 'absolute',
+	  top: 'calc(50% - 0.6em)',  // move label up
+	  left: '153%',
+	  transform: 'translate(-50%, -50%)',
+	  color: 'white',
+	  fontSize: '0.9em',
+	  fontWeight: 'bold',
+	  pointerEvents: 'none'
+	});
+	arContainer.appendChild(arLabel);
+
+	const resLabel = doc.createElement('span');
+	resLabel.textContent = resolution;
+	Object.assign(resLabel.style, {
+	  display: 'block',
+	  position: 'absolute',
+	  bottom: '-0.2em',  // move resolution up
+	  left: '153%',
+	  transform: 'translateX(-50%)',
+	  color: 'var(--md-sys-color-tertiary)',
+	  fontSize: '0.7em',
+	  pointerEvents: 'none'
+	});
+	arContainer.appendChild(resLabel);
+    mediaInfoEl.appendChild(arContainer);
+
+    const audioSpan = doc.createElement('span');
+    audioSpan.classList.add('osd-info-audio');
+    let logoUrl = null;
+    if (/Dolby/.test(audioName)) {
+      logoUrl = 'https://i.imgur.com/OQznNju.png';
+    } else if (/DTS/.test(normalizedCodec)) {
+      logoUrl = 'https://i.imgur.com/MDSPYNQ.png';
+    } else if (/MP3/.test(normalizedCodec)) {
+      logoUrl = 'https://i.imgur.com/TSCRgW7.png';
+    } else if (audioName === 'AAC') {
+      logoUrl = 'https://i.imgur.com/WMdFZcv.png';
+    }
+    if (logoUrl) {
+      const imgEl = doc.createElement('img');
+      imgEl.src = logoUrl;
+      imgEl.style.height = '2.5em';
+      imgEl.style.verticalAlign = 'bottom';
+      audioSpan.appendChild(imgEl);
+    } else {
+      audioSpan.textContent = audioName;
+    }
+    const chSpan = doc.createElement('span');
+    chSpan.textContent = `${audioCh}ch`;
+    chSpan.style.fontSize = '0.8em';
+    chSpan.style.color = '#fff';
+    chSpan.style.position = 'relative';
+	chSpan.style.top = '0.15em';
+	chSpan.style.left = '-1.9em';
+	chSpan.style.fontWeight = '200';
+    chSpan.style.verticalAlign = 'bottom';
+	audioSpan.appendChild(chSpan);
+    mediaInfoEl.appendChild(audioSpan);
+	
+
+    doc.querySelectorAll('#osdMediaInfo > *').forEach(el => {
+      el.style.display = 'inline-block';
+      el.style.margin = '0 3.5em 0em 0';
+      el.style.verticalAlign = 'middle';
+    });
+
+  } catch (e) {
+    console.error('⛔ showOsdExtras: error fetching metadata', e);
+    if (versionEl) {
+      versionEl.textContent = '(Error loading metadata)';
+      versionEl.classList.remove('osd-hidden');
+    }
+  }
+
+  // ─── ClearArt setup & fetch ───────────────────────────────────
+  let clearArtEl = doc.getElementById('osdClearArt');
+  if (!clearArtEl) {
+    clearArtEl = doc.createElement('img');
+    clearArtEl.id = 'osdClearArt';
+    clearArtEl.classList.add('osd-hidden');
+    clearArtEl.onerror = () => clearArtEl.classList.add('osd-hidden');
+    Object.assign(clearArtEl.style, {
+      position: 'fixed',
+      bottom: '5.7em',
+      right: '3em',
+      maxWidth: '30vw',
+      maxHeight: '500px',
+      zIndex: 999,
+      pointerEvents: 'none'
+    });
+    doc.body.appendChild(clearArtEl);
+  }
+  try {
+    const artMeta = await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
+                     .then(r => r.json());
+    const artId = artMeta.SeriesId || itemId;
+    clearArtEl.src = `/Items/${artId}/Images/Art?api_key=${token}`;
+    clearArtEl.classList.remove('osd-hidden');
+  } catch (e) {
+    console.error('⛔ showOsdExtras: error fetching clearart', e);
+    clearArtEl.classList.add('osd-hidden');
+  }
+}
+
 
 
                 // ───────────────────────────────────────────────────────────────────────────────
@@ -740,22 +825,19 @@
                         nowPlayingMode = true;
                         if (!osdExtrasActive) hideOsdExtras();
 
-                        // Observe the bottom OSD container to hide extras when OSD disappears
+                        /* Observe the bottom OSD container to hide extras when OSD disappears
 						const osdBottom = jellyfin.document.querySelector('.videoOsdBottom');
 						if (osdBottom) {
 							const observer = new MutationObserver(() => {
 								const hidden = osdBottom.classList.contains('videoOsdBottom-hidden')
 											|| osdBottom.classList.contains('hide');
 								if (hidden && osdExtrasActive) {
-									// wait 3 seconds before hiding extras
-									setTimeout(() => {
-										hideOsdExtras();
-										osdExtrasActive = false;
-									}, 3000);
+									hideOsdExtras();
+									osdExtrasActive = false;
 								}
 							});
 							observer.observe(osdBottom, { attributes: true, attributeFilter: ['class'] });
-						}
+						} */
 
                         // ─── Inject “parent-show-logo” once per video page ────────────────
                         (function() {
@@ -1234,9 +1316,9 @@
 					// if you need to clear any previous focus state, do it here:
 					// previousElement = null;
 
-					updateFocusableElements();
-					initializeFocus();
-				  }, 100);
+					isInitialized = false;
+                    init();
+				  }, 1000);
 				}
 
 				/* then hook it up as before:*/
