@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.9.4</title>
+    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.9.5</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -517,10 +517,10 @@ async function showOsdExtras() {
       bottom: '4.7em',
       left: '12px',
       fontFamily: 'Inter, sans-serif',
-      fontSize: '16pt',
-      fontWeight: '900',
+      fontSize: '14pt',
+      fontWeight: '600',
       color: 'var(--md-sys-color-tertiary)',
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: 'rgba(0,0,0,0.3)',
       padding: '6px 10px',
       borderRadius: '5px',
       maxWidth: '70vw',
@@ -536,20 +536,13 @@ async function showOsdExtras() {
   const versionEl = doc.getElementById('osdMoreText');
 
   try {
+    // ─── Fetch basic metadata ────────────────────────────────────
     const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
     const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
     const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
     const data    = await metaRes.json();
 
-    if (versionEl) {
-      if (data.Overview) {
-        versionEl.textContent = data.Overview;
-        versionEl.classList.remove('osd-hidden');
-      } else {
-        versionEl.classList.add('osd-hidden');
-      }
-    }
-
+    // ─── Parse streams & compute display values ──────────────────
     const streams     = data.MediaStreams || [];
     const vs          = streams.find(s => s.Type === 'Video') || {};
     const as          = streams.find(s => s.Type === 'Audio') || {};
@@ -557,6 +550,7 @@ async function showOsdExtras() {
     const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
     const aspectRatio = vs.AspectRatio || resolution;
 
+    // ─── Format air date ─────────────────────────────────────────
     let airDate = 'Unknown';
     if (data.PremiereDate) {
       const d      = new Date(data.PremiereDate);
@@ -565,6 +559,7 @@ async function showOsdExtras() {
       airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
     }
 
+    // ─── Fetch rating, genre, studio ────────────────────────────
     let rating = '', genre = '', studio = '';
     const sourceId = data.SeriesId || itemId;
     try {
@@ -585,46 +580,27 @@ async function showOsdExtras() {
       }
     } catch {}
 
-    const audioCodecRaw   = (as.Codec || '?').toUpperCase();
-    const audioCh         = as.Channels || '?';
-    const normalizedCodec = audioCodecRaw.replace(/[^A-Z0-9]/g, '');
-    const codecMap        = {
-      'AC3': 'Dolby Digital',
-      'EAC3': 'Dolby Digital Plus',
-      'TRUEHD': 'Dolby TrueHD',
-      'DTS': 'DTS',
-      'DTSHD': 'DTS-HD',
-      'MP3': 'MP3',
-      'MPEG3': 'MP3',
-      'AAC': 'AAC',
-      'FLAC': 'FLAC'
-    };
-    const audioName = codecMap[normalizedCodec] || audioCodecRaw;
+    // ─── Prepend genre, rating, and date to the plot text ───────
+    if (versionEl) {
+      if (data.Overview) {
+        const prefixParts = [];
+        if (genre)  prefixParts.push(genre);
+        if (rating) prefixParts.push(rating);
+        prefixParts.push(airDate);
+        versionEl.textContent = prefixParts.join(' | ') + '\n' + data.Overview;
+        versionEl.classList.remove('osd-hidden');
+      } else {
+        versionEl.classList.add('osd-hidden');
+      }
+    }
 
-
+    // ─── Build mediaInfo spans (studio, codecs, aspect & audio) ─
     if (studio) {
       const el = doc.createElement('span');
       el.classList.add('osd-info-studio');
       el.textContent = studio;
       mediaInfoEl.appendChild(el);
     }
-    if (genre) {
-      const el = doc.createElement('span');
-      el.classList.add('osd-info-genre');
-      el.textContent = genre;
-      mediaInfoEl.appendChild(el);
-    }
-    if (rating) {
-      const el = doc.createElement('span');
-      el.classList.add('osd-info-rating');
-      el.textContent = `[${rating}]`;
-      mediaInfoEl.appendChild(el);
-    }
-
-    const dateEl = doc.createElement('span');
-    dateEl.classList.add('osd-info-date');
-    dateEl.textContent = airDate;
-    mediaInfoEl.appendChild(dateEl);
 
     const codecEl = doc.createElement('span');
     codecEl.classList.add('osd-info-videoCodec');
@@ -641,51 +617,64 @@ async function showOsdExtras() {
       margin: '0 0.2em'
     });
     const arImg = doc.createElement('img');
-	arImg.src = 'https://i.imgur.com/qida0rI.png';
-	arImg.style.height = '2.9em';
-	arImg.style.verticalAlign = 'bottom';
-	arImg.style.display = 'block';
-	arImg.style.position = 'relative';
-	arImg.style.top = '-0.55em';  // move icon up
-	arContainer.appendChild(arImg);
-
-	const arLabel = doc.createElement('span');
-	arLabel.textContent = aspectRatio;
-	Object.assign(arLabel.style, {
-	  position: 'absolute',
-	  top: 'calc(50% - 0.6em)',  // move label up
-	  left: '153%',
-	  transform: 'translate(-50%, -50%)',
-	  color: 'white',
-	  fontSize: '0.9em',
-	  fontWeight: 'bold',
-	  pointerEvents: 'none'
-	});
-	arContainer.appendChild(arLabel);
-
-	const resLabel = doc.createElement('span');
-	resLabel.textContent = resolution;
-	Object.assign(resLabel.style, {
-	  display: 'block',
-	  position: 'absolute',
-	  bottom: '-0.2em',  // move resolution up
-	  left: '153%',
-	  transform: 'translateX(-50%)',
-	  color: 'var(--md-sys-color-tertiary)',
-	  fontSize: '0.7em',
-	  pointerEvents: 'none'
-	});
-	arContainer.appendChild(resLabel);
+    arImg.src = 'https://i.imgur.com/qida0rI.png';
+    arImg.style.height = '1.9em';
+    arImg.style.verticalAlign = 'bottom';
+    arImg.style.display = 'block';
+    arImg.style.position = 'relative';
+    arImg.style.top = '-0.55em';
+    arContainer.appendChild(arImg);
+    const arLabel = doc.createElement('span');
+    arLabel.textContent = aspectRatio;
+    Object.assign(arLabel.style, {
+      position: 'absolute',
+      top: 'calc(50% - 0.6em)',
+      left: '153%',
+      transform: 'translate(-50%, -50%)',
+      color: 'white',
+      fontSize: '0.9em',
+      fontWeight: 'bold',
+      pointerEvents: 'none'
+    });
+    arContainer.appendChild(arLabel);
+    const resLabel = doc.createElement('span');
+    resLabel.textContent = resolution;
+    Object.assign(resLabel.style, {
+      display: 'block',
+      position: 'absolute',
+      bottom: '-0.2em',
+      left: '153%',
+      transform: 'translateX(-50%)',
+      color: 'var(--md-sys-color-tertiary)',
+      fontSize: '0.7em',
+      pointerEvents: 'none'
+    });
+    arContainer.appendChild(resLabel);
     mediaInfoEl.appendChild(arContainer);
 
     const audioSpan = doc.createElement('span');
     audioSpan.classList.add('osd-info-audio');
+    const audioCodecRaw = (as.Codec || '?').toUpperCase();
+    const audioCh       = as.Channels || '?';
+    const normalized    = audioCodecRaw.replace(/[^A-Z0-9]/g, '');
+    const codecMap      = {
+      'AC3': 'Dolby Digital',
+      'EAC3': 'Dolby Digital Plus',
+      'TRUEHD': 'Dolby TrueHD',
+      'DTS': 'DTS',
+      'DTSHD': 'DTS-HD',
+      'MP3': 'MP3',
+      'MPEG3': 'MP3',
+      'AAC': 'AAC',
+      'FLAC': 'FLAC'
+    };
+    const audioName = codecMap[normalized] || audioCodecRaw;
     let logoUrl = null;
     if (/Dolby/.test(audioName)) {
       logoUrl = 'https://i.imgur.com/OQznNju.png';
-    } else if (/DTS/.test(normalizedCodec)) {
+    } else if (/DTS/.test(normalized)) {
       logoUrl = 'https://i.imgur.com/MDSPYNQ.png';
-    } else if (/MP3/.test(normalizedCodec)) {
+    } else if (/MP3/.test(normalized)) {
       logoUrl = 'https://i.imgur.com/TSCRgW7.png';
     } else if (audioName === 'AAC') {
       logoUrl = 'https://i.imgur.com/WMdFZcv.png';
@@ -693,7 +682,7 @@ async function showOsdExtras() {
     if (logoUrl) {
       const imgEl = doc.createElement('img');
       imgEl.src = logoUrl;
-      imgEl.style.height = '2.5em';
+      imgEl.style.height = '1.5em';
       imgEl.style.verticalAlign = 'bottom';
       audioSpan.appendChild(imgEl);
     } else {
@@ -701,20 +690,21 @@ async function showOsdExtras() {
     }
     const chSpan = doc.createElement('span');
     chSpan.textContent = `${audioCh}ch`;
-    chSpan.style.fontSize = '0.8em';
-    chSpan.style.color = '#fff';
-    chSpan.style.position = 'relative';
-	chSpan.style.top = '0.15em';
-	chSpan.style.left = '-1.9em';
-	chSpan.style.fontWeight = '200';
-    chSpan.style.verticalAlign = 'bottom';
-	audioSpan.appendChild(chSpan);
+    Object.assign(chSpan.style, {
+      fontSize: '0.8em',
+      color: '#fff',
+      position: 'relative',
+      top: '0.15em',
+      left: '-1.9em',
+      fontWeight: '200',
+      verticalAlign: 'bottom'
+    });
+    audioSpan.appendChild(chSpan);
     mediaInfoEl.appendChild(audioSpan);
-	
 
     doc.querySelectorAll('#osdMediaInfo > *').forEach(el => {
-      el.style.display = 'inline-block';
-      el.style.margin = '0 3.5em 0em 0';
+      el.style.display       = 'inline-block';
+      el.style.margin        = '0 2.5em 0 0';
       el.style.verticalAlign = 'middle';
     });
 
@@ -757,7 +747,6 @@ async function showOsdExtras() {
 }
 
 
-
                 // ───────────────────────────────────────────────────────────────────────────────
                 // NOW-PLAYING PAGE DETECTION & LOGO INJECTION
                 // ───────────────────────────────────────────────────────────────────────────────
@@ -789,7 +778,7 @@ async function showOsdExtras() {
                                 border-radius: 6px;
 								display: -webkit-box;
 								-webkit-box-orient: vertical;
-								-webkit-line-clamp: 5;
+								-webkit-line-clamp: 7;
 								overflow: hidden;
                                 max-width: 62vw;
                                 white-space: pre-wrap;
