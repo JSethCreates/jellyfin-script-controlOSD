@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seths UI - A Jellyfin UI Enhancement and Remote Control Handler v6.9.7</title>
+    <title>Seth's UI - A Jellyfin UI Enhancement and Remote Control Handler v7.0.0</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -312,13 +312,19 @@
                             background-color: var(--md-sys-color-primary);
                             transform: scale(1.05);
                         }
+						/* Change text color when the cardBox is highlighted */
+							.cardBox.keyboard-nav-highlight .cardText,
+							.cardBox.keyboard-nav-highlight .cardText-secondary {
+								color: var(--md-sys-color-on-primary) !important;
+						}
+						
                         /* Other element-specific highlight overrides */
                         .listItem.keyboard-nav-highlight {
                             background-color: var(--md-hover-primary) !important;
                         }
                         #navButtons button.keyboard-nav-highlight {
                             background-color: var(--md-sys-color-primary) !important;
-                            color: var(--md-sys-color-on-primary) !important;
+                            color:  var(--md-sys-color-on-primary)!important;
                             transition: background-color 0.2s ease, transform 0.2s ease;
                         }
                         #navButtons button.keyboard-nav-highlight .material-icons {
@@ -326,14 +332,14 @@
                         }
                         .actionSheetMenuItem.keyboard-nav-highlight,
                         .navMenuOption.keyboard-nav-highlight {
-                            background-color: var(--md-hover-primary) !important;
+                            background-color: var(--sys-color-primary) !important;
                         }
                         .cardOverlayFab-primary.keyboard-nav-highlight {
                             background: linear-gradient(rgba(0, 164, 220, 0.1), rgba(0, 164, 220, 0.1)) padding-box,
                                         var(--border-color) border-box !important;
                         }
                         .paper-icon-button-light.keyboard-nav-highlight:not(:disabled) {
-                            color: var(--md-sys-color-surface) !important;
+                            color: var(--md-sys-color-on-primary) !important;
                             background-color: var(--md-sys-color-primary) !important;
                         }
                         .formDialogHeader .btnCancel.keyboard-nav-highlight {
@@ -344,8 +350,8 @@
                             box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.3) !important;
                         }
                         .mainDetailButtons .detailButton.keyboard-nav-highlight {
-                            background-color: var(--md-sys-color-surface-container) !important;
-                            color: var(--md-sys-color-primary) !important;
+                            background-color: var(--md-sys-color-primary) !important;
+                            color: var(--md-sys-color-on-primary) !important;
                             box-shadow: none !important;
                             background-image: none !important;
                             backdrop-filter: none !important;
@@ -359,8 +365,8 @@
                             border-bottom-left-radius: 999px !important;
                         }
                         a.button-link.itemAction.emby-button.keyboard-nav-highlight {
-                            background-color: var(--md-sys-color-surface-container) !important;
-                            color: var(--md-sys-color-on-surface) !important;
+                            background-color: var(--md-sys-color-primary) !important;
+                            color: var(--md-sys-color-on-primary) !important;
                             border-color: var(--md-sys-color-outline) !important;
                         }
                         a.overview-expand.emby-button.keyboard-nav-highlight {
@@ -378,11 +384,14 @@
                         }
                         .btnPlay.detailButton.keyboard-nav-highlight {
                             transform: translateY(-0.7em) scale(1.2) !important;
-                            color: var(--md-sys-color-surface) !important;
+                            color: var(--md-sys-color-on-primary) !important;
                             background-color: var(--md-sys-color-primary) !important;
                             box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
                             z-index: 3 !important;
                         }
+						.btnPlay.detailButton.keyboard-nav-highlight[title="Resume"]::after {
+							color: var(--md-sys-color-on-primary) !important;
+						}
                     `;
                     const injectTarget = doc.head || doc.documentElement;
 					injectTarget.appendChild(style);
@@ -514,7 +523,7 @@ async function showOsdExtras() {
     Object.assign(mediaInfoEl.style, {
       position: 'fixed',
       bottom: '4.2em',
-      left: '20px',
+      left: '35px',
       fontFamily: 'Inter, sans-serif',
       fontSize: '18pt',
       fontWeight: '900',
@@ -582,31 +591,49 @@ async function showOsdExtras() {
 
     // ─── Prepend genre, rating, and date to the plot text ───────
     if (versionEl) {
-      if (data.Overview) {
-        const parts = [];
-        if (genre)  parts.push(genre);
-        if (rating) parts.push(rating);
-        // wrap only the date in a styled span:
-        parts.push(
-          `<span style="
-             color: var(--md-sys-color-tertiary);
-             font-weight: 900;
-           ">${airDate}</span>`
-        );
-        versionEl.innerHTML = parts.join(' | ')
-                            + '<br>'
-                            + data.Overview;
-        versionEl.classList.remove('osd-hidden');
-      } else {
-        versionEl.classList.add('osd-hidden');
-      }
-    }
+	  if (data.Overview) {
+		const parts = [];
+
+		if (genre) {
+		  const genreHtml =
+			'<span style="color:var(--md-sys-color-tertiary);font-weight:900;">' +
+			  '<span class="material-icons" style="vertical-align:middle;margin-right:4px;">' +
+				'theater_comedy' +
+			  '</span>' +
+			  genre +
+			'</span>';
+		  parts.push(genreHtml);
+		}
+
+		if (rating) {
+		  const ratingHtml =
+			'<span style="font-weight:900;">' +
+			  rating +
+			'</span>';
+		  parts.push(ratingHtml);
+		}
+
+		const dateHtml =
+		  '<span style="color:var(--md-sys-color-tertiary);font-weight:900;">' +
+			airDate +
+		  '</span>';
+		parts.push(dateHtml);
+
+		versionEl.innerHTML = parts.join(' | ') + '<br>' + data.Overview;
+		versionEl.classList.remove('osd-hidden');
+	  } else {
+		versionEl.classList.add('osd-hidden');
+	  }
+	}
 
     // ─── Build mediaInfo spans (studio, codecs, aspect & audio) ─
     if (studio) {
       const el = doc.createElement('span');
-      el.classList.add('osd-info-studio');
-      el.textContent = studio;
+	  el.classList.add('osd-info-studio');
+	  el.textContent = studio;
+	  Object.assign(el.style, {
+	  color: 'var(--color-text-body)',
+	  });
       mediaInfoEl.appendChild(el);
     }
 
@@ -617,7 +644,7 @@ async function showOsdExtras() {
 	  position:      'relative',
 	  top: 			'-0.5em',
 	  color:        'var(--md-sys-color-tertiary)',
-	  fontSize:     '0.8em',
+	  fontSize:     '0.9em',
 	  fontWeight:   '900',
 	});
 	mediaInfoEl.appendChild(codecEl);
@@ -632,8 +659,9 @@ async function showOsdExtras() {
       margin: '0 0.2em'
     });
     const arImg = doc.createElement('img');
-    arImg.src = 'https://i.imgur.com/qida0rI.png';
-    arImg.style.height = '1.7em';
+    // arImg.src = 'https://i.imgur.com/qida0rI.png';
+    arImg.src = '/web/assets/img/display.png';
+	arImg.style.height = '1.7em';
     arImg.style.verticalAlign = 'bottom';
     arImg.style.display = 'block';
     arImg.style.position = 'relative';
@@ -658,7 +686,7 @@ async function showOsdExtras() {
 	  display: 'block',
 	  position: 'absolute',
 	  bottom: '-0.15em',
-	  left: '-205%',
+	  left: '-235%',
 	  transform: 'translateX(-50%)',
 	  color: '#fff',
 	  backgroundColor: 'var(--md-sys-color-tertiary)',
@@ -689,18 +717,22 @@ async function showOsdExtras() {
     const audioName = codecMap[normalized] || audioCodecRaw;
     let logoUrl = null;
     if (/Dolby/.test(audioName)) {
-      logoUrl = 'https://i.imgur.com/OQznNju.png';
+      // logoUrl = 'https://i.imgur.com/OQznNju.png';
+	  logoUrl = '/web/assets/img/dolby.png';
     } else if (/DTS/.test(normalized)) {
-      logoUrl = 'https://i.imgur.com/MDSPYNQ.png';
+      // logoUrl = 'https://i.imgur.com/MDSPYNQ.png';
+	  logoUrl = '/web/assets/img/dts.png';
     } else if (/MP3/.test(normalized)) {
-      logoUrl = 'https://i.imgur.com/TSCRgW7.png';
+      // logoUrl = 'https://i.imgur.com/TSCRgW7.png';
+	  logoUrl = '/web/assets/img/mp3.png';
     } else if (audioName === 'AAC') {
-      logoUrl = 'https://i.imgur.com/WMdFZcv.png';
+      // logoUrl = 'https://i.imgur.com/WMdFZcv.png';
+	  logoUrl = '/web/assets/img/aac.png';
     }
     if (logoUrl) {
       const imgEl = doc.createElement('img');
       imgEl.src = logoUrl;
-      imgEl.style.height = '1.4em';
+      imgEl.style.height = '1.7em';
       imgEl.style.verticalAlign = 'bottom';
       audioSpan.appendChild(imgEl);
     } else {
@@ -712,7 +744,7 @@ async function showOsdExtras() {
       fontSize: '0.6em',
       color: 'var(--md-sys-color-tertiary)',
       position: 'relative',
-      top: '0.25em',
+      top: '0.2em',
       left: '-1.4em',
       fontWeight: '900',
       verticalAlign: 'bottom'
@@ -807,7 +839,7 @@ async function showOsdExtras() {
 								white-space: pre-wrap;
 								word-wrap: break-word;
 
-								text-shadow: 0 1px 100px rgba(0, 0, 0, 0.4);
+								text-shadow: 0 1px 50px rgba(0, 0, 0, 0.4);
 
 								/* big diffuse glow fading at edges */
 								box-shadow:
