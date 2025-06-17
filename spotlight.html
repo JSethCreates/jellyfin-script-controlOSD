@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seth's UI - A Jellyfin UI Enhancement and Remote Control Handler v7.0.0</title>
+    <title>Seth's UI - A Jellyfin UI Enhancement and Remote Control Handler v7.0.1</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -257,26 +257,20 @@
                         }
 
                         /* Style for Pause button in simple OSD mode */
-                        button.btnPause,
-                        button.btnPause.keyboard-nav-highlight {
+                        .btnPause,
+                        .btnPause.keyboard-nav-highlight {
                             bottom: 2.6em !important;
                             left: 5em !important;
                             transform: scale(1.6) !important;
                             border-radius: 6px !important;
                             background-color: var(--md-sys-color-primary) !important;
                             color: var(--md-sys-color-on-primary) !important;
-                            z-index: 999;
+                            z-index: 99999;
                         }
-						/* Style for Header Buttons */
-						.emby-tab-button.keyboard-nav-highlight {
-							border-radius: 4px;
-							background-color: var(--md-sys-color-primary) !important;
-							color: var(--md-sys-color-on-primary) !important;
-							box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-							transition: background-color 0.2s ease, transform 0.2s ease;
-						}
+						
                         /* Override Pause button style when in OSD “extras” mode */
-                        button.btnPause.osdExtrasMode {
+                        .btnPause.osdExtrasMode,
+						.btnPause.keyboard-nav-highlight.osdExtrasMode	{
                             bottom: auto !important;
                             left: auto !important;
                             transform: none !important;
@@ -298,14 +292,7 @@
                             100% { box-shadow: 0 0 10px ${boxShadowColor}; }
                         }
 						*/
-
-                        /* In an iframe, disable the box-shadow */
-                        .featurediframe .keyboard-nav-highlight {
-                            transform: none !important;
-                            outline: 2px solid var(--md-sys-color-primary);
-                            box-shadow: none !important;
-                            animation: none !important;
-                        }
+                       
                         /* CardBox highlight style */
                         .cardBox.keyboard-nav-highlight {
                             box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
@@ -316,6 +303,13 @@
 							.cardBox.keyboard-nav-highlight .cardText,
 							.cardBox.keyboard-nav-highlight .cardText-secondary {
 								color: var(--md-sys-color-on-primary) !important;
+						}
+						
+						/* Style for Header Buttons */
+						.emby-tab-button.keyboard-nav-highlight {
+							border-radius: 4px;
+							background-color: var(--md-sys-color-primary) !important;
+							transition: background-color 0.2s ease, transform 0.2s ease;
 						}
 						
                         /* Other element-specific highlight overrides */
@@ -364,19 +358,12 @@
                             border-top-left-radius: 999px !important;
                             border-bottom-left-radius: 999px !important;
                         }
-                        a.button-link.itemAction.emby-button.keyboard-nav-highlight {
+						a.button-link.itemAction.emby-button.keyboard-nav-highlight,
+						button.raised.more.raised-mini.noIcon.emby-button.keyboard-nav-highlight,
+                        a.overview-expand.emby-button.keyboard-nav-highlight {
                             background-color: var(--md-sys-color-primary) !important;
                             color: var(--md-sys-color-on-primary) !important;
-                            border-color: var(--md-sys-color-outline) !important;
-                        }
-                        a.overview-expand.emby-button.keyboard-nav-highlight {
-                            background-color: var(--md-sys-color-surface-container) !important;
-                            color: var(--md-sys-color-on-surface) !important;
-                        }
-                        button.raised.more.raised-mini.noIcon.emby-button.keyboard-nav-highlight {
-                            background-color: var(--md-sys-color-surface-container) !important;
-                            color: var(--md-sys-color-on-surface) !important;
-                            box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.25) !important;
+							border-color: var(--md-sys-color-outline) !important;
                         }
                         .listItemBody.actionsheetListItemBody.keyboard-nav-highlight {
                             background-color: var(--md-sys-color-surface-container) !important;
@@ -386,12 +373,12 @@
                             transform: translateY(-0.7em) scale(1.2) !important;
                             color: var(--md-sys-color-on-primary) !important;
                             background-color: var(--md-sys-color-primary) !important;
-                            box-shadow: 0 0 20px var(--md-sys-color-secondary) !important;
                             z-index: 3 !important;
                         }
 						.btnPlay.detailButton.keyboard-nav-highlight[title="Resume"]::after {
 							color: var(--md-sys-color-on-primary) !important;
 						}
+						
                     `;
                     const injectTarget = doc.head || doc.documentElement;
 					injectTarget.appendChild(style);
@@ -431,7 +418,10 @@
 					);
 
 					const btnPause = jellyfin.document.querySelector('button.btnPause');
-					if (btnPause) btnPause.classList.remove('osdExtrasMode');
+					if (btnPause) {
+					  btnPause.classList.remove('osdExtrasMode');
+					  btnPause.classList.remove('keyboard-nav-highlight');
+					}
 
 					const clearArtEl = jellyfin.document.getElementById('osdClearArt');
 					if (clearArtEl) clearArtEl.classList.add('osd-hidden');
@@ -443,359 +433,374 @@
 					if (mediaInfoEl) mediaInfoEl.classList.add('osd-hidden');
 				}
 
-async function showOsdExtras() {
-  // ─── Reveal all OSD elements ─────────────────────────────────
-  osdElementsToHide.forEach(sel =>
-    jellyfin.document.querySelectorAll(sel).forEach(el =>
-      el.classList.remove('osd-hidden')
-    )
-  );
+				async function showOsdExtras() {
+				  // ─── Reveal all OSD elements ─────────────────────────────────
+				  osdElementsToHide.forEach(sel =>
+					jellyfin.document.querySelectorAll(sel).forEach(el =>
+					  el.classList.remove('osd-hidden')
+					)
+				  );
 
-  // ─── Highlight Pause button in “extras” mode ──────────────
-  const btnPause = jellyfin.document.querySelector('button.btnPause');
-  if (btnPause) {
-    btnPause.classList.add('osdExtrasMode');
-    if (isElementVisible(btnPause)) {
-      btnPause.classList.add('keyboard-nav-highlight');
-      scrollIntoView(btnPause);
-      btnPause.focus();
-      previousElement = btnPause;
-    }
-  }
+				  // ─── Highlight Pause button in “extras” mode ──────────────
+				  const btnPause = jellyfin.document.querySelector('button.btnPause');
+				  if (btnPause) {
+					btnPause.classList.add('osdExtrasMode');
+					if (isElementVisible(btnPause)) {
+					  btnPause.classList.add('keyboard-nav-highlight');
+					  scrollIntoView(btnPause);
+					  btnPause.focus();
+					  previousElement = btnPause;
 
-  // ─── Determine API token & userId ─────────────────────────────
-  const doc = jellyfin.document;
-  let initJson = null;
-  const initEl = doc.getElementById('jellyfin-initialization-data');
-  if (initEl) {
-    try { initJson = JSON.parse(initEl.textContent); } catch {}
-  }
-  let localCred = null;
-  try {
-    const raw = localStorage.getItem('jellyfin_credentials');
-    if (raw) localCred = JSON.parse(raw);
-  } catch {}
-  const token = initJson?.AccessToken
-               || localCred?.Servers?.[0]?.AccessToken
-               || (() => {
-                    const v = doc.querySelector('video');
-                    const s = v?.currentSrc || v?.src || '';
-                    return s.match(/[?&]api_key=([^&]+)/i)?.[1] || null;
-                  })();
-  const userId = initJson?.User?.Id || localCred?.Servers?.[0]?.UserId;
-  if (!token) {
-    console.error('⛔ showOsdExtras: no API token found');
-    return;
-  }
+					  // ← REPLACED: immediate re-anchor
+					  window.requestAnimationFrame(() => {
+						updateFocusableElements();
+						reanchorOnPause();
+						for (let r = 0; r < focusableElements.length; r++) {
+						  const c = focusableElements[r].indexOf(btnPause);
+						  if (c !== -1) {
+							currentRow = r;
+							currentCol = c;
+							break;
+						  }
+						}
+						previousElement = btnPause;
+					  });
+					}
+				  }
+				  
+				  // ─── Determine API token & userId ─────────────────────────────
+				  const doc = jellyfin.document;
+				  let initJson = null;
+				  const initEl = doc.getElementById('jellyfin-initialization-data');
+				  if (initEl) {
+					try { initJson = JSON.parse(initEl.textContent); } catch {}
+				  }
+				  let localCred = null;
+				  try {
+					const raw = localStorage.getItem('jellyfin_credentials');
+					if (raw) localCred = JSON.parse(raw);
+				  } catch {}
+				  const token = initJson?.AccessToken
+							   || localCred?.Servers?.[0]?.AccessToken
+							   || (() => {
+									const v = doc.querySelector('video');
+									const s = v?.currentSrc || v?.src || '';
+									return s.match(/[?&]api_key=([^&]+)/i)?.[1] || null;
+								  })();
+				  const userId = initJson?.User?.Id || localCred?.Servers?.[0]?.UserId;
+				  if (!token) {
+					console.error('⛔ showOsdExtras: no API token found');
+					return;
+				  }
 
-  // ─── Determine the current itemId ─────────────────────────────
-  const video = doc.querySelector('video');
-  const src = video?.currentSrc || video?.src || '';
-  let itemId = null;
-  if (src && !src.startsWith('blob:')) {
-    itemId = src.match(/\/Videos\/([0-9a-f]{32})\//i)?.[1]
-          || src.match(/mediaSourceId=([0-9a-f]{32})/i)?.[1];
-  }
-  if (!itemId) {
-    console.log('🔄 showOsdExtras: falling back to /Sessions');
-    const deviceId = src.match(/[?&]deviceId=([^&]+)/i)?.[1];
-    try {
-      const resp = await fetch(`/Sessions?api_key=${token}`, { credentials: 'same-origin' });
-      const sessions = await resp.json();
-      const session = sessions.find(s =>
-        (userId && s.UserId === userId) && (deviceId ? s.DeviceId === deviceId : true)
-      ) || sessions.find(s => s.UserId === userId) || sessions[0];
-      itemId = session?.NowPlayingItem?.Id || session?.NowViewingItem?.Id;
-    } catch (e) {
-      console.error('⛔ showOsdExtras: error fetching sessions', e);
-    }
-  }
-  if (!itemId) {
-    console.error('⛔ showOsdExtras: unable to determine itemId');
-    return;
-  }
+				  // ─── Determine the current itemId ─────────────────────────────
+				  const video = doc.querySelector('video');
+				  const src = video?.currentSrc || video?.src || '';
+				  let itemId = null;
+				  if (src && !src.startsWith('blob:')) {
+					itemId = src.match(/\/Videos\/([0-9a-f]{32})\//i)?.[1]
+						  || src.match(/mediaSourceId=([0-9a-f]{32})/i)?.[1];
+				  }
+				  if (!itemId) {
+					console.log('🔄 showOsdExtras: falling back to /Sessions');
+					const deviceId = src.match(/[?&]deviceId=([^&]+)/i)?.[1];
+					try {
+					  const resp = await fetch(`/Sessions?api_key=${token}`, { credentials: 'same-origin' });
+					  const sessions = await resp.json();
+					  const session = sessions.find(s =>
+						(userId && s.UserId === userId) && (deviceId ? s.DeviceId === deviceId : true)
+					  ) || sessions.find(s => s.UserId === userId) || sessions[0];
+					  itemId = session?.NowPlayingItem?.Id || session?.NowViewingItem?.Id;
+					} catch (e) {
+					  console.error('⛔ showOsdExtras: error fetching sessions', e);
+					}
+				  }
+				  if (!itemId) {
+					console.error('⛔ showOsdExtras: unable to determine itemId');
+					return;
+				  }
 
-  // ─── Ensure mediaInfo container exists ────────────────────────
-  let mediaInfoEl = doc.getElementById('osdMediaInfo');
-  if (!mediaInfoEl) {
-    mediaInfoEl = doc.createElement('div');
-    mediaInfoEl.id = 'osdMediaInfo';
-    Object.assign(mediaInfoEl.style, {
-      position: 'fixed',
-      bottom: '4.2em',
-      left: '35px',
-      fontFamily: 'Inter, sans-serif',
-      fontSize: '18pt',
-      fontWeight: '900',
-      color: 'var(--md-sys-color-tertiary)',
-	  
-	  padding: '0px 5px',
-      borderRadius: '5px',
-      maxWidth: '65vw',
-      whiteSpace: 'pre-wrap',
-      zIndex: 997,
-      textShadow: '2px 2px 2px rgba(0, 0, 0, 0.8)',
-	  textAlign: 'left'
-    });
-    doc.body.appendChild(mediaInfoEl);
-  }
-  mediaInfoEl.classList.remove('osd-hidden');
-  mediaInfoEl.innerHTML = ''; // clear previous
+				  // ─── Ensure mediaInfo container exists ────────────────────────
+				  let mediaInfoEl = doc.getElementById('osdMediaInfo');
+				  if (!mediaInfoEl) {
+					mediaInfoEl = doc.createElement('div');
+					mediaInfoEl.id = 'osdMediaInfo';
+					Object.assign(mediaInfoEl.style, {
+					  position: 'fixed',
+					  bottom: '4.2em',
+					  left: '35px',
+					  fontFamily: 'Inter, sans-serif',
+					  fontSize: '18pt',
+					  fontWeight: '900',
+					  color: 'var(--md-sys-color-tertiary)',
+					  
+					  padding: '0px 5px',
+					  borderRadius: '5px',
+					  maxWidth: '65vw',
+					  whiteSpace: 'pre-wrap',
+					  zIndex: 997,
+					  textShadow: '2px 2px 2px rgba(0, 0, 0, 0.8)',
+					  textAlign: 'left'
+					});
+					doc.body.appendChild(mediaInfoEl);
+				  }
+				  mediaInfoEl.classList.remove('osd-hidden');
+				  mediaInfoEl.innerHTML = ''; // clear previous
 
-  const versionEl = doc.getElementById('osdMoreText');
+				  const versionEl = doc.getElementById('osdMoreText');
 
-  try {
-    // ─── Fetch basic metadata ────────────────────────────────────
-    const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
-    const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
-    const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
-    const data    = await metaRes.json();
+				  try {
+					// ─── Fetch basic metadata ────────────────────────────────────
+					const fields = ['Overview','MediaStreams','SeriesId','PremiereDate'].join(',');
+					const metaUrl = `/Items/${itemId}?fields=${fields}&api_key=${token}`;
+					const metaRes = await fetch(metaUrl, { credentials: 'same-origin' });
+					const data    = await metaRes.json();
 
-    // ─── Parse streams & compute display values ──────────────────
-    const streams     = data.MediaStreams || [];
-    const vs          = streams.find(s => s.Type === 'Video') || {};
-    const as          = streams.find(s => s.Type === 'Audio') || {};
-    const videoCodec  = (vs.Codec || '?').toUpperCase();
-    const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
-    const aspectRatio = vs.AspectRatio || resolution;
+					// ─── Parse streams & compute display values ──────────────────
+					const streams     = data.MediaStreams || [];
+					const vs          = streams.find(s => s.Type === 'Video') || {};
+					const as          = streams.find(s => s.Type === 'Audio') || {};
+					const videoCodec  = (vs.Codec || '?').toUpperCase();
+					const resolution  = (vs.Width && vs.Height) ? `${vs.Width}x${vs.Height}` : '?';
+					const aspectRatio = vs.AspectRatio || resolution;
 
-    // ─── Format air date ─────────────────────────────────────────
-    let airDate = 'Unknown';
-    if (data.PremiereDate) {
-      const d      = new Date(data.PremiereDate);
-      const day    = d.getDate();
-      const suffix = (n => (n>3 && n<21) ? 'th' : ['st','nd','rd'][((n%10)-1)] || 'th')(day);
-      airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
-    }
+					// ─── Format air date ─────────────────────────────────────────
+					let airDate = 'Unknown';
+					if (data.PremiereDate) {
+					  const d      = new Date(data.PremiereDate);
+					  const day    = d.getDate();
+					  const suffix = (n => (n>3 && n<21) ? 'th' : ['st','nd','rd'][((n%10)-1)] || 'th')(day);
+					  airDate      = `${d.toLocaleString('en-US',{month:'long'})} ${day}${suffix}, ${d.getFullYear()}`;
+					}
 
-    // ─── Fetch rating, genre, studio ────────────────────────────
-    let rating = '', genre = '', studio = '';
-    const sourceId = data.SeriesId || itemId;
-    try {
-      const rgFields = ['OfficialRating','Genres','Studios'].join(',');
-      const rgUrl    = `/Items/${sourceId}?fields=${rgFields}&api_key=${token}`;
-      const rgRes    = await fetch(rgUrl, { credentials: 'same-origin' });
-      const rgData   = await rgRes.json();
-      if (typeof rgData.OfficialRating === 'string') {
-        rating = rgData.OfficialRating.startsWith('Rated')
-          ? rgData.OfficialRating
-          : `Rated ${rgData.OfficialRating}`;
-      }
-      if (Array.isArray(rgData.Genres) && rgData.Genres.length) {
-        genre = rgData.Genres[0];
-      }
-      if (Array.isArray(rgData.Studios) && rgData.Studios.length) {
-        studio = rgData.Studios[0].Name.trim();
-      }
-    } catch {}
+					// ─── Fetch rating, genre, studio ────────────────────────────
+					let rating = '', genre = '', studio = '';
+					const sourceId = data.SeriesId || itemId;
+					try {
+					  const rgFields = ['OfficialRating','Genres','Studios'].join(',');
+					  const rgUrl    = `/Items/${sourceId}?fields=${rgFields}&api_key=${token}`;
+					  const rgRes    = await fetch(rgUrl, { credentials: 'same-origin' });
+					  const rgData   = await rgRes.json();
+					  if (typeof rgData.OfficialRating === 'string') {
+						rating = rgData.OfficialRating.startsWith('Rated')
+						  ? rgData.OfficialRating
+						  : `Rated ${rgData.OfficialRating}`;
+					  }
+					  if (Array.isArray(rgData.Genres) && rgData.Genres.length) {
+						genre = rgData.Genres[0];
+					  }
+					  if (Array.isArray(rgData.Studios) && rgData.Studios.length) {
+						studio = rgData.Studios[0].Name.trim();
+					  }
+					} catch {}
 
-    // ─── Prepend genre, rating, and date to the plot text ───────
-    if (versionEl) {
-	  if (data.Overview) {
-		const parts = [];
+					// ─── Prepend genre, rating, and date to the plot text ───────
+					if (versionEl) {
+					  if (data.Overview) {
+						const parts = [];
 
-		if (genre) {
-		  const genreHtml =
-			'<span style="color:var(--md-sys-color-tertiary);font-weight:900;">' +
-			  '<span class="material-icons" style="vertical-align:middle;margin-right:4px;">' +
-				'theater_comedy' +
-			  '</span>' +
-			  genre +
-			'</span>';
-		  parts.push(genreHtml);
-		}
+						if (genre) {
+						  const genreHtml =
+							'<span style="color:var(--md-sys-color-primary);font-weight:900;">' +
+							  '<span class="material-icons" style="vertical-align:middle;margin-right:4px;">' +
+								'theater_comedy' +
+							  '</span>' +
+							  genre +
+							'</span>';
+						  parts.push(genreHtml);
+						}
 
-		if (rating) {
-		  const ratingHtml =
-			'<span style="font-weight:900;">' +
-			  rating +
-			'</span>';
-		  parts.push(ratingHtml);
-		}
+						if (rating) {
+						  const ratingHtml =
+							'<span style="font-weight:900;">' +
+							  rating +
+							'</span>';
+						  parts.push(ratingHtml);
+						}
 
-		const dateHtml =
-		  '<span style="color:var(--md-sys-color-tertiary);font-weight:900;">' +
-			airDate +
-		  '</span>';
-		parts.push(dateHtml);
+						const dateHtml =
+						  '<span style="color:var(--md-sys-color-primary);font-weight:900;">' +
+							airDate +
+						  '</span>';
+						parts.push(dateHtml);
 
-		versionEl.innerHTML = parts.join(' | ') + '<br>' + data.Overview;
-		versionEl.classList.remove('osd-hidden');
-	  } else {
-		versionEl.classList.add('osd-hidden');
-	  }
-	}
+						versionEl.innerHTML = parts.join(' | ') + '<br>' + data.Overview;
+						versionEl.classList.remove('osd-hidden');
+					  } else {
+						versionEl.classList.add('osd-hidden');
+					  }
+					}
 
-    // ─── Build mediaInfo spans (studio, codecs, aspect & audio) ─
-    if (studio) {
-      const el = doc.createElement('span');
-	  el.classList.add('osd-info-studio');
-	  el.textContent = studio;
-	  Object.assign(el.style, {
-	  color: 'var(--color-text-body)',
-	  });
-      mediaInfoEl.appendChild(el);
-    }
+					// ─── Build mediaInfo spans (studio, codecs, aspect & audio) ─
+					if (studio) {
+					  const el = doc.createElement('span');
+					  el.classList.add('osd-info-studio');
+					  el.textContent = studio;
+					  Object.assign(el.style, {
+					  color: 'var(--color-text-body)',
+					  fontSize:     '1.2em',
+					  });
+					  mediaInfoEl.appendChild(el);
+					}
 
-    const codecEl = doc.createElement('span');
-	codecEl.classList.add('osd-info-videoCodec');
-	codecEl.textContent = videoCodec;
-	Object.assign(codecEl.style, {
-	  position:      'relative',
-	  top: 			'-0.5em',
-	  color:        'var(--md-sys-color-tertiary)',
-	  fontSize:     '0.9em',
-	  fontWeight:   '900',
-	});
-	mediaInfoEl.appendChild(codecEl);
+					const codecEl = doc.createElement('span');
+					codecEl.classList.add('osd-info-videoCodec');
+					codecEl.textContent = videoCodec;
+					Object.assign(codecEl.style, {
+					  position:      'relative',
+					  top: 			'-0.5em',
+					  color:        'var(--md-sys-color-tertiary)',
+					  fontSize:     '0.8em',
+					  fontWeight:   '900',
+					});
+					mediaInfoEl.appendChild(codecEl);
 
-    const arContainer = doc.createElement('span');
-    arContainer.classList.add('osd-info-aspectContainer');
-    Object.assign(arContainer.style, {
-      display: 'inline-block',
-      position: 'relative',
-      width: '1.5em',
-      height: '1.5em',
-      margin: '0 0.2em'
-    });
-    const arImg = doc.createElement('img');
-    // arImg.src = 'https://i.imgur.com/qida0rI.png';
-    arImg.src = '/web/assets/img/display.png';
-	arImg.style.height = '1.7em';
-    arImg.style.verticalAlign = 'bottom';
-    arImg.style.display = 'block';
-    arImg.style.position = 'relative';
-    arImg.style.top = '-0.1em';
-    arContainer.appendChild(arImg);
-    const arLabel = doc.createElement('span');
-    arLabel.textContent = aspectRatio;
-    Object.assign(arLabel.style, {
-      position: 'absolute',
-      top: 'calc(50% - 0.2em)',
-      left: '90%',
-      transform: 'translate(-50%, -50%)',
-      color: 'white',
-      fontSize: '0.7em',
-      fontWeight: 'bold',
-      pointerEvents: 'none'
-    });
-    arContainer.appendChild(arLabel);
-    const resLabel = doc.createElement('span');
-    resLabel.textContent = resolution;
-    Object.assign(resLabel.style, {
-	  display: 'block',
-	  position: 'absolute',
-	  bottom: '-0.15em',
-	  left: '-235%',
-	  transform: 'translateX(-50%)',
-	  color: '#fff',
-	  backgroundColor: 'var(--md-sys-color-tertiary)',
-	  borderRadius: '3px',
-	  padding: '1px 1px',
-	  fontSize: '0.5em',
-	  pointerEvents: 'none'
-	});
-    arContainer.appendChild(resLabel);
-    mediaInfoEl.appendChild(arContainer);
+					const arContainer = doc.createElement('span');
+					arContainer.classList.add('osd-info-aspectContainer');
+					Object.assign(arContainer.style, {
+					  display: 'inline-block',
+					  position: 'relative',
+					  width: '1.5em',
+					  height: '1.5em',
+					  margin: '0 0.2em'
+					});
+					const arImg = doc.createElement('img');
+					// arImg.src = 'https://i.imgur.com/qida0rI.png';
+					arImg.src = '/web/assets/img/display.png';
+					arImg.style.height = '1.7em';
+					arImg.style.verticalAlign = 'bottom';
+					arImg.style.display = 'block';
+					arImg.style.position = 'relative';
+					arImg.style.top = '-0.1em';
+					arContainer.appendChild(arImg);
+					const arLabel = doc.createElement('span');
+					arLabel.textContent = aspectRatio;
+					Object.assign(arLabel.style, {
+					  position: 'absolute',
+					  top: 'calc(50% - 0.2em)',
+					  left: '90%',
+					  transform: 'translate(-50%, -50%)',
+					  color: 'white',
+					  fontSize: '0.7em',
+					  fontWeight: 'bold',
+					  pointerEvents: 'none'
+					});
+					arContainer.appendChild(arLabel);
+					const resLabel = doc.createElement('span');
+					resLabel.textContent = resolution;
+					Object.assign(resLabel.style, {
+					  display: 'block',
+					  position: 'absolute',
+					  bottom: '-0.15em',
+					  left: '-213%',
+					  transform: 'translateX(-50%)',
+					  color: '#fff',
+					  backgroundColor: 'var(--md-sys-color-tertiary)',
+					  borderRadius: '3px',
+					  padding: '1px 1px',
+					  fontSize: '0.5em',
+					  pointerEvents: 'none'
+					});
+					arContainer.appendChild(resLabel);
+					mediaInfoEl.appendChild(arContainer);
 
-    const audioSpan = doc.createElement('span');
-    audioSpan.classList.add('osd-info-audio');
-    const audioCodecRaw = (as.Codec || '?').toUpperCase();
-    const audioCh       = as.Channels || '?';
-    const normalized    = audioCodecRaw.replace(/[^A-Z0-9]/g, '');
-    const codecMap      = {
-      'AC3': 'Dolby Digital',
-      'EAC3': 'Dolby Digital Plus',
-      'TRUEHD': 'Dolby TrueHD',
-      'DTS': 'DTS',
-      'DTSHD': 'DTS-HD',
-      'MP3': 'MP3',
-      'MPEG3': 'MP3',
-      'AAC': 'AAC',
-      'FLAC': 'FLAC'
-    };
-    const audioName = codecMap[normalized] || audioCodecRaw;
-    let logoUrl = null;
-    if (/Dolby/.test(audioName)) {
-      // logoUrl = 'https://i.imgur.com/OQznNju.png';
-	  logoUrl = '/web/assets/img/dolby.png';
-    } else if (/DTS/.test(normalized)) {
-      // logoUrl = 'https://i.imgur.com/MDSPYNQ.png';
-	  logoUrl = '/web/assets/img/dts.png';
-    } else if (/MP3/.test(normalized)) {
-      // logoUrl = 'https://i.imgur.com/TSCRgW7.png';
-	  logoUrl = '/web/assets/img/mp3.png';
-    } else if (audioName === 'AAC') {
-      // logoUrl = 'https://i.imgur.com/WMdFZcv.png';
-	  logoUrl = '/web/assets/img/aac.png';
-    }
-    if (logoUrl) {
-      const imgEl = doc.createElement('img');
-      imgEl.src = logoUrl;
-      imgEl.style.height = '1.7em';
-      imgEl.style.verticalAlign = 'bottom';
-      audioSpan.appendChild(imgEl);
-    } else {
-      audioSpan.textContent = audioName;
-    }
-    const chSpan = doc.createElement('span');
-    chSpan.textContent = `${audioCh}ch`;
-    Object.assign(chSpan.style, {
-      fontSize: '0.6em',
-      color: 'var(--md-sys-color-tertiary)',
-      position: 'relative',
-      top: '0.2em',
-      left: '-1.4em',
-      fontWeight: '900',
-      verticalAlign: 'bottom'
-    });
-    audioSpan.appendChild(chSpan);
-    mediaInfoEl.appendChild(audioSpan);
+					const audioSpan = doc.createElement('span');
+					audioSpan.classList.add('osd-info-audio');
+					const audioCodecRaw = (as.Codec || '?').toUpperCase();
+					const audioCh       = as.Channels || '?';
+					const normalized    = audioCodecRaw.replace(/[^A-Z0-9]/g, '');
+					const codecMap      = {
+					  'AC3': 'Dolby Digital',
+					  'EAC3': 'Dolby Digital Plus',
+					  'TRUEHD': 'Dolby TrueHD',
+					  'DTS': 'DTS',
+					  'DTSHD': 'DTS-HD',
+					  'MP3': 'MP3',
+					  'MPEG3': 'MP3',
+					  'AAC': 'AAC',
+					  'FLAC': 'FLAC'
+					};
+					const audioName = codecMap[normalized] || audioCodecRaw;
+					let logoUrl = null;
+					if (/Dolby/.test(audioName)) {
+					  // logoUrl = 'https://i.imgur.com/OQznNju.png';
+					  logoUrl = '/web/assets/img/dolby.png';
+					} else if (/DTS/.test(normalized)) {
+					  // logoUrl = 'https://i.imgur.com/MDSPYNQ.png';
+					  logoUrl = '/web/assets/img/dts.png';
+					} else if (/MP3/.test(normalized)) {
+					  // logoUrl = 'https://i.imgur.com/TSCRgW7.png';
+					  logoUrl = '/web/assets/img/mp3.png';
+					} else if (audioName === 'AAC') {
+					  // logoUrl = 'https://i.imgur.com/WMdFZcv.png';
+					  logoUrl = '/web/assets/img/aac.png';
+					}
+					if (logoUrl) {
+					  const imgEl = doc.createElement('img');
+					  imgEl.src = logoUrl;
+					  imgEl.style.height = '1.7em';
+					  imgEl.style.verticalAlign = 'bottom';
+					  audioSpan.appendChild(imgEl);
+					} else {
+					  audioSpan.textContent = audioName;
+					}
+					const chSpan = doc.createElement('span');
+					chSpan.textContent = `${audioCh}ch`;
+					Object.assign(chSpan.style, {
+					  fontSize: '0.6em',
+					  color: 'var(--md-sys-color-primary)',
+					  position: 'relative',
+					  top: '0.2em',
+					  left: '-1.4em',
+					  fontWeight: '900',
+					  verticalAlign: 'bottom'
+					});
+					audioSpan.appendChild(chSpan);
+					mediaInfoEl.appendChild(audioSpan);
 
-    doc.querySelectorAll('#osdMediaInfo > *').forEach(el => {
-      el.style.display       = 'inline-block';
-      el.style.margin        = '0 2.5em 0 0';
-      el.style.verticalAlign = 'middle';
-    });
+					doc.querySelectorAll('#osdMediaInfo > *').forEach(el => {
+					  el.style.display       = 'inline-block';
+					  el.style.margin        = '0 2.5em 0 0';
+					  el.style.verticalAlign = 'middle';
+					});
 
-  } catch (e) {
-    console.error('⛔ showOsdExtras: error fetching metadata', e);
-    if (versionEl) {
-      versionEl.textContent = '(Error loading metadata)';
-      versionEl.classList.remove('osd-hidden');
-    }
-  }
+				  } catch (e) {
+					console.error('⛔ showOsdExtras: error fetching metadata', e);
+					if (versionEl) {
+					  versionEl.textContent = '(Error loading metadata)';
+					  versionEl.classList.remove('osd-hidden');
+					}
+				  }
 
-  // ─── ClearArt setup & fetch ───────────────────────────────────
-  let clearArtEl = doc.getElementById('osdClearArt');
-  if (!clearArtEl) {
-    clearArtEl = doc.createElement('img');
-    clearArtEl.id = 'osdClearArt';
-    clearArtEl.classList.add('osd-hidden');
-    clearArtEl.onerror = () => clearArtEl.classList.add('osd-hidden');
-    Object.assign(clearArtEl.style, {
-      position: 'fixed',
-      bottom: '5.7em',
-      right: '3em',
-      maxWidth: '30vw',
-      maxHeight: '500px',
-      zIndex: 999,
-      pointerEvents: 'none'
-    });
-    doc.body.appendChild(clearArtEl);
-  }
-  try {
-    const artMeta = await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
-                     .then(r => r.json());
-    const artId = artMeta.SeriesId || itemId;
-    clearArtEl.src = `/Items/${artId}/Images/Art?api_key=${token}`;
-    clearArtEl.classList.remove('osd-hidden');
-  } catch (e) {
-    console.error('⛔ showOsdExtras: error fetching clearart', e);
-    clearArtEl.classList.add('osd-hidden');
-  }
-}
-
+				  // ─── ClearArt setup & fetch ───────────────────────────────────
+				  let clearArtEl = doc.getElementById('osdClearArt');
+				  if (!clearArtEl) {
+					clearArtEl = doc.createElement('img');
+					clearArtEl.id = 'osdClearArt';
+					clearArtEl.classList.add('osd-hidden');
+					clearArtEl.onerror = () => clearArtEl.classList.add('osd-hidden');
+					Object.assign(clearArtEl.style, {
+					  position: 'fixed',
+					  bottom: '5.7em',
+					  right: '3em',
+					  maxWidth: '30vw',
+					  maxHeight: '500px',
+					  zIndex: 999,
+					  pointerEvents: 'none'
+					});
+					doc.body.appendChild(clearArtEl);
+				  }
+				  try {
+					const artMeta = await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
+									 .then(r => r.json());
+					const artId = artMeta.SeriesId || itemId;
+					clearArtEl.src = `/Items/${artId}/Images/Art?api_key=${token}`;
+					clearArtEl.classList.remove('osd-hidden');
+				  } catch (e) {
+					console.error('⛔ showOsdExtras: error fetching clearart', e);
+					clearArtEl.classList.add('osd-hidden');
+				  }
+				}
 
                 // ───────────────────────────────────────────────────────────────────────────────
                 // NOW-PLAYING PAGE DETECTION & LOGO INJECTION
@@ -824,8 +829,7 @@ async function showOsdExtras() {
 								line-height: 1.3;
 								color: #F0F0F0;
 
-								 /* keep your dark base */
-								background-color: rgba(0, 0, 0, 0.7);
+								
 								padding: 0px 12px;
 								border-radius: 6px;
 
@@ -839,12 +843,11 @@ async function showOsdExtras() {
 								white-space: pre-wrap;
 								word-wrap: break-word;
 
-								text-shadow: 0 1px 50px rgba(0, 0, 0, 0.4);
-
-								/* big diffuse glow fading at edges */
-								box-shadow:
-								  0 0 20px 20px rgba(0, 0, 0, 0.7);
-								  /* optional subtle inner shading */
+ 
+								box-shadow: 0 0 20px 20px rgba(0, 0, 0, 0.5);
+								background-color: rgba(0, 0, 0, 0.5);
+								
+								   /*  optional subtle inner shading */
 								  //inset -5px -5px 20px rgba(0, 0, 0, 0.6);
 
 								pointer-events: none;
@@ -950,6 +953,8 @@ async function showOsdExtras() {
                     }
                     else {
                         // Leaving video page: remove logo, plot, and clearart
+						hideOsdExtras();
+						osdExtrasActive = false;
                         const existingLogo   = jellyfin.document.getElementById('parent-show-logo');
                         const plotEl         = jellyfin.document.getElementById('osdMoreText');
                         const clearArtEl     = jellyfin.document.getElementById('osdClearArt');
@@ -1146,14 +1151,19 @@ async function showOsdExtras() {
                     let first = null;
 
                     // 1) If on home page, focus rightButton inside featured iframe
-                    if (url.includes('#/home.html')) {
-                        const iframe = jellyfin.document.querySelector('.featurediframe');
-                        const btn = iframe?.contentDocument?.querySelector('#rightButton');
-                        if (btn && isElementVisible(btn)) {
-                            first = btn;
-                        }
-                    }
-                    // 2) If on video page, focus pause button
+                    if (url.includes('#/home')) {
+						// always clear out any old focus
+						previousElement = null;
+						currentRow = currentCol = -1;
+
+						// then re-find the first “rightButton” in the iframe
+						const iframe = jellyfin.document.querySelector('.featurediframe');
+						const btn    = iframe?.contentDocument?.querySelector('#rightButton');
+						if (btn && isElementVisible(btn)) {
+						  first = btn;
+						}
+					}
+										// 2) If on video page, focus pause button
                     else if (url.includes('#/video')) {
                         const btnPause = jellyfin.document.querySelector('button.btnPause');
                         if (btnPause && isElementVisible(btnPause)) {
@@ -1238,7 +1248,7 @@ async function showOsdExtras() {
                               || active.closest('#rightButton');
                     if (isLR) skipFocusReset = true;
 
-                    if (!isLR && !skipFocusReset) {
+                    if (!isLR && !skipFocusReset && !osdExtrasActive) {
                         if (previousElement) {
                             previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
                             if (previousElement.classList.contains('clickable-overlay')) {
@@ -1273,19 +1283,26 @@ async function showOsdExtras() {
 
                     switch (e.key) {
 						case 'ArrowUp':
-							moveFocus(-1, 0);
-
-							// only toggle extras if we’re on a video page
 							if (nowPlayingMode) {
+								// clear any old highlight before toggling
+								if (previousElement) {
+									previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+								}
+
+								// toggle extras; showOsdExtras always focuses only the Pause button
 								if (!osdExtrasActive) {
 									osdExtrasActive = true;
 									showOsdExtras();
 								} else {
 									osdExtrasActive = false;
 									hideOsdExtras();
+									// reset focus grid back to Pause button
+									initializeFocus();
 								}
+							} else {
+								// on non-video pages, still allow normal up/down nav
+								moveFocus(-1, 0);
 							}
-
 							e.preventDefault();
 							break;
 
@@ -1375,8 +1392,9 @@ async function showOsdExtras() {
 				/* then hook it up as before:*/
 				window.addEventListener('hashchange',   handleLocationChange);
 				window.addEventListener('popstate',     handleLocationChange);
+				const _pushState = history.pushState;
 				history.pushState = function(...args) {
-				  originalPush.apply(this, args);
+				  _pushState.apply(this, args);
 				  handleLocationChange();
 				};
 				
@@ -1384,13 +1402,6 @@ async function showOsdExtras() {
                 window.addEventListener('hashchange', handleLocationChange);
                 window.addEventListener('popstate', handleLocationChange);
 
-                // Also patch history.pushState to catch manual pushes
-                const _pushState = history.pushState;
-                history.pushState = function (...args) {
-                    _pushState.apply(this, args);
-                    handleLocationChange();
-                };
-				
 
                 // On “back” from nested navigation, reinitialize focus
                 function handleBack() {
@@ -1472,7 +1483,7 @@ async function showOsdExtras() {
                     isInitialized = true;
                     // Force one more update of focusable elements after 2 seconds (fallback)
                     setTimeout(() => {
-                        console.log('↪ Forcing fallback update of focusable elements (0.1s post-init)');
+                        console.log('Forcing fallback update of focusable elements (0.1s post-init)');
                         updateFocusableElements();
                     }, 1000);
                 }
