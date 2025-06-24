@@ -243,24 +243,15 @@
                         /* Override the default Jellyfin page title asset */
                         .pageTitleWithDefaultLogo {
                             background-image: url(/web/assets/img/icon-transparent.png) !important;
-                        }
-						/* Reposition the video slider in OSD */
-                        .sliderContainer {
-                            position: relative !important;
-                            left: 1.8em !important;
-                            max-width: 88% !important;
-                        }
-                        /* Reposition the time text in OSD */
-                        .osdTextContainer.endTimeText.osdDurationText {
-                            position: relative !important;
-                            left: 1em !important;
-                        }
-
+						    transform: translateY(0px) scale(0.8) !important;
+						    transform-origin: top center;
+						}
+						                        
                         /* Style for Pause button in simple OSD mode */
                         .btnPause,
                         .btnPause.keyboard-nav-highlight {
-                            bottom: 2.6em !important;
-                            left: 5em !important;
+                            bottom: 2.5em !important;
+                            left: 6.3em !important;
                             transform: scale(1.6) !important;
                             border-radius: 6px !important;
                             background-color: var(--md-sys-color-primary) !important;
@@ -914,8 +905,8 @@
                                 position:       'absolute',
                                 top:            '10px',
                                 left:           '20px',
-                                maxWidth:       '400px',
-                                maxHeight:      '400px',
+                                maxWidth:       '25vw',
+                                // maxHeight:      '400px',
                                 transformOrigin:'top left',
                                 zIndex:         999
                             };
@@ -1485,7 +1476,7 @@
                     setTimeout(() => {
                         console.log('Forcing fallback update of focusable elements (0.1s post-init)');
                         updateFocusableElements();
-                    }, 1000);
+                    }, 3000);
                 }
 
                 // Called whenever a featured iframe loads
