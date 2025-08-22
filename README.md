@@ -14,10 +14,10 @@ This unified script adjusts **navigation accessibility** & simplifies Jellyfinâ€
    - **Simple OSD**: minimal, pause + timeline only  
    - **Extended OSD**: extended with plot, artwork, and extras  
 
-This also helps users who face neuro or motor challenges with complex UIs. The simple OSD pares it down to just a pause button and timeline, keeping controls clear and easy to manage.  
+This helps users who face neuro or motor challenges with complex UIs. The simple OSD pares it down to just a pause button and timeline, keeping controls clear and easy to manage. This also allows users to enjoy CSS themes and plugins with remote control navigation and thus the experience does not have to be different from PC to an AndroidTV Box or Firestick for example. 
 
 ## Features  
-While the visual & OSD adjustments will be divisive, the main point of this script is to extend accessibility for users on webview clients (like tablets / Firesticks / Android boxes with sideloaded Android Jellyfin apks) to use **Adaptive Controllers** ([Eg. Xbox Adaptive Controller](https://www.xbox.com/en-US/accessories/controllers/xbox-adaptive-joystick)) rather than touch input.  
+While the visual & OSD adjustments will be divisive, the main point of this script is to extend accessibility for users on webview clients (like tablets / Firesticks / Android boxes to use **Adaptive Controllers** ([Eg. Xbox Adaptive Controller](https://www.xbox.com/en-US/accessories/controllers/xbox-adaptive-joystick)) rather than touch input.  
 
 ## Installation  
 1. Download **controlOSD.html** to a `UI` folder you create, a \Server\jellyfin-web\UI\ directory.  
