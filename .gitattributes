@@ -2,4 +2,4 @@
 *.html linguist-detectable=true
 *.js linguist-detectable=true
 *.css linguist-detectable=true
-SethsUI.html linguist-language=JavaScript
+controlOSD.html linguist-language=JavaScript
