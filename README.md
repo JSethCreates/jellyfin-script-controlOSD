@@ -1,6 +1,8 @@
 # ControlOSD  
 *A Jellyfin UI Enhancement script*
 
+![1](https://raw.githubusercontent.com/JSethCreates/jellyfin-script-controlOSD/refs/heads/main/screenshots/1.PNG)
+
 ## Purpose  
 This unified script adjusts **navigation accessibility** & simplifies Jellyfin’s **On-Screen Display (OSD)** in any client which uses JFweb by:  
 
@@ -16,7 +18,7 @@ This also helps users who face neuro or motor challenges with complex UIs. The s
 While the visual & OSD adjustments will be divisive, the main point of this script is to extend accessibility for users on webview clients (like tablets / Firesticks / Android boxes with sideloaded Android Jellyfin apks) to use **Adaptive Controllers** ([Eg. Xbox Adaptive Controller](https://www.xbox.com/en-US/accessories/controllers/xbox-adaptive-joystick)) rather than touch input.  
 
 ## Installation  
-1. Download **controlOSD.html** to a `UI` folder you create in \Server\jellyfin-web\UI\ directory.  
+1. Download **controlOSD.html** to a `UI` folder you create, a \Server\jellyfin-web\UI\ directory.  
 
 2. Go back to your `\Server\jellyfin-web\` directory and search for **index.html**.  
 
@@ -37,6 +39,8 @@ Most **Adaptive Controllers (or USB remotes)** send inputs as keyboard keystroke
 - **Arrow Keys**: Navigation through cards and links  
 - **Enter**: Select Item, Play/Pause Toggle  
 - **Arrow Up (in NowPlaying/video mode)**: Toggle extended OSD information and controls  
+
+![2](https://raw.githubusercontent.com/JSethCreates/jellyfin-script-controlOSD/refs/heads/main/screenshots/2.PNG)
 
 ## TODO  
 - [ ] Currently the script was made for & works best with the [GNAT Theme](https://github.com/JSethCreates/jellyfin-theme-sethstyle). Better, more universal highlighting for other themes coming soon.  
