@@ -3,7 +3,7 @@
 
 
 ![1](https://github.com/JSethCreates/jellyfin-script-controlOSD/blob/main/screenshots/1.PNG?raw=true)
-
+**(Simple OSD with added logo)**
 
 ## Purpose  
 This unified script adjusts **navigation accessibility** & simplifies Jellyfin’s **On-Screen Display (OSD)** in any client which uses JFweb by:  
@@ -42,7 +42,8 @@ Most **Adaptive Controllers (or USB remotes)** send inputs as keyboard keystroke
 - **Enter**: Select Item, Play/Pause Toggle  
 - **Arrow Up (in NowPlaying/video mode)**: Toggle extended OSD information and controls  
 
-![2](https://raw.githubusercontent.com/JSethCreates/jellyfin-script-controlOSD/main/screenshots/2.PNG)
+![2](https://github.com/JSethCreates/jellyfin-script-controlOSD/blob/main/screenshots/2.PNG?raw=true)
+**(Extended OSD with Clearart, Plot, and additional details)**
 
 ## TODO  
 - [ ] Currently the script was made for & works best with the [GNAT Theme](https://github.com/JSethCreates/jellyfin-theme-sethstyle). Better, more universal highlighting for other themes coming soon.  
