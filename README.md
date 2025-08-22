@@ -6,7 +6,7 @@
 **(Simple OSD with added media logo)**
 
 ## Purpose  
-While the visual & OSD adjustments will be divisive, the main point of this script is demonstrate how to extend accessibility for users on webview clients (like tablets / Firesticks / Android boxes to use **Adaptive Controllers** ([Eg. Xbox Adaptive Controller](https://www.xbox.com/en-US/accessories/controllers/xbox-adaptive-joystick)) rather than touch input. THe side benefit is this works with common usb remote controls as well, allowing a consistent experience between all devices from PC to TV.
+While the visual & OSD adjustments will be divisive, the main point of this script is demonstrate how to extend accessibility for users on webview clients (like tablets / Firesticks / Android boxes to use **Adaptive Controllers** ([Eg. Xbox Adaptive Controller](https://www.xbox.com/en-US/accessories/controllers/xbox-adaptive-joystick)) rather than touch input. The side benefit, is that this works with common usb remote controls as well, allowing a consistent experience between all devices from PC to TV.
 
 ## Features  
 This unified script adjusts **navigation accessibility** & simplifies Jellyfin’s **On-Screen Display (OSD)** in any client which uses JFweb by:  
