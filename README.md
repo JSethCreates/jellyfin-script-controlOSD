@@ -16,8 +16,9 @@ This unified script adjusts **navigation accessibility** & simplifies Jellyfin�
 2. **Injecting styles and JavaScript adjustments** beyond Jellyfin’s custom CSS system, removing redundant UI clutter, and reshaping the NowPlaying (Video) OSD into two modes:  
    - **Simple OSD**: minimal, pause + timeline only  
    - **Extended OSD**: extended with plot, artwork, and extras  
-
-This helps users who face neuro or motor challenges with complex UIs. The simple OSD pares it down to just a pause button and timeline, keeping controls clear and easy to manage. This also allows users to enjoy CSS themes and plugins with remote control navigation and thus the experience does not have to be different from PC to an AndroidTV Box or Firestick for example. 
+ 
+The simple OSD pares it down to just a pause button and timeline, this helps users who face neuro or motor challenges with complex UIs, keeping controls clear and easy to manage. 
+This also allows users to enjoy CSS themes and plugins with remote control navigation, so the experience does not have to be different from PC to an AndroidTV Box or Firestick for example.
 
 
 ## Installation  
