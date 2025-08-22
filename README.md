@@ -1,7 +1,9 @@
 # ControlOSD  
 *A Jellyfin UI Enhancement script*
 
-![1](https://raw.githubusercontent.com/JSethCreates/jellyfin-script-controlOSD/main/screenshots/1.PNG)
+
+![1](https://github.com/JSethCreates/jellyfin-script-controlOSD/blob/main/screenshots/1.PNG?raw=true)
+
 
 ## Purpose  
 This unified script adjusts **navigation accessibility** & simplifies Jellyfin’s **On-Screen Display (OSD)** in any client which uses JFweb by:  
