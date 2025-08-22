@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Seth's UI - A Jellyfin UI Enhancement and Remote Control Handler v7.0.1</title>
+    <title>Control OSD - A Jellyfin UI Enhancement and Remote Control Handler v1.2.3</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
         :root { --highlight-color: var(--md-sys-color-primary); }
@@ -10,7 +10,7 @@
         .keyboard-nav-highlight {
             background-color: var(--highlight-color) !important;
         }
-        .featurediframe .keyboard-nav-highlight {
+        .spotlightiframe .keyboard-nav-highlight {
             transform: none !important;
             box-shadow: none !important;
         }
@@ -45,9 +45,9 @@
 
                 // Selectors for any element that can receive focus
                 const selectors = `
+					.upNextDialog-button,
                     .btnPlay,
                     .itemsContainer .cardBox,
-                    .emby-scrollbuttons-button,
                     .mainDetailButtons .detailButton,
                     .buttons .paper-icon-button-light,
                     .playerControlsContainer button,
@@ -55,7 +55,7 @@
                     .emby-tabs-slider button,
                     .headerRight button,
                     .headerLeft button,
-                    .featurediframe,
+                    .spotlightiframe,
                     #leftButton,
                     #rightButton,
                     .button-link.itemAction.emby-button,
@@ -222,7 +222,6 @@
                         }
                         /* Hide header buttons not needed in TV mode */
                         .headerSyncButton,
-                        .headerCastButton,
                         .headerUserButton,
                         .headerBackButton {
                             display: none !important;
@@ -240,7 +239,7 @@
 							content: "";
 						}
 													
-                        /* Override the default Jellyfin page title asset */
+                        /* Override the default Jellyfin page title assets */
                         .pageTitleWithDefaultLogo {
                             background-image: url(/web/assets/img/icon-transparent.png) !important;
 						    transform: translateY(0px) scale(0.8) !important;
@@ -252,12 +251,18 @@
                         .btnPause.keyboard-nav-highlight {
                             bottom: 2.5em !important;
                             left: 6.3em !important;
-                            transform: scale(1.6) !important;
+                            transform: scale(1.4) !important;
                             border-radius: 6px !important;
-                            background-color: var(--md-sys-color-primary) !important;
-                            color: var(--md-sys-color-on-primary) !important;
+                            background-color: var(--md-sys-color-primary-container) !important;
+                            color: var(--md-sys-color-on-primary-container) !important;
                             z-index: 99999;
                         }
+						
+						.flex-grow.mdl-slider-container {
+							position: fixed !important;
+							left: 11.3em !important;
+							right: calc(6em + 2vw) !important;
+						}
 						
                         /* Override Pause button style when in OSD “extras” mode */
                         .btnPause.osdExtrasMode,
@@ -268,9 +273,10 @@
                             background-color: transparent !important;
                             color: inherit !important;
                         }
-
-                        /* Highlight animation glow, bit too fancy?
-                        .keyboard-nav-highlight {
+						
+                        /* Old glow 
+						
+						.keyboard-nav-highlight {
                             position: relative;
                             transition: transform 0.3s ease, background-color 0.3s ease;
                             ${isIframe ? '' : `box-shadow: 0 0 10px ${boxShadowColor}`};
@@ -285,17 +291,16 @@
 						*/
                        
                         /* CardBox highlight style */
-                        .cardBox.keyboard-nav-highlight {
-                            box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5);
-                            background-color: var(--md-sys-color-primary);
-                            transform: scale(1.05);
-                        }
-						/* Change text color when the cardBox is highlighted */
-							.cardBox.keyboard-nav-highlight .cardText,
-							.cardBox.keyboard-nav-highlight .cardText-secondary {
-								color: var(--md-sys-color-on-primary) !important;
+						.cardBox.keyboard-nav-highlight {
+							transform: scale(1.05) !important;
+							box-shadow: 6px 6px 8px rgba(0, 0, 0, 0.5) !important;
+							background-image: linear-gradient(
+								rgba(var(--md-sys-color-on-primary-container-rgb, 255, 255, 255), 0.1),
+								rgba(var(--md-sys-color-on-primary-container-rgb, 255, 255, 255), 0.1)
+							) !important;
+							background-blend-mode: lighten !important;
 						}
-						
+												
 						/* Style for Header Buttons */
 						.emby-tab-button.keyboard-nav-highlight {
 							border-radius: 4px;
@@ -369,8 +374,18 @@
 						.btnPlay.detailButton.keyboard-nav-highlight[title="Resume"]::after {
 							color: var(--md-sys-color-on-primary) !important;
 						}
+						.upNextDialog-button.keyboard-nav-highlight {
+							background-color: var(--md-sys-color-primary) !important;
+							color: var(--md-sys-color-on-primary) !important;
+							box-shadow: 0 0 8px rgba(0,0,0,0.6) !important;
+							border-radius: 6px !important;
+							transition: background-color 0.2s ease, transform 0.2s ease;
+						}
+						.skinHeader-withBackground.osdHeader {
+						  height: 20em !important;
+						}
 						
-                    `;
+                   `;
                     const injectTarget = doc.head || doc.documentElement;
 					injectTarget.appendChild(style);
                 }
@@ -391,7 +406,7 @@
 					injectTarget.appendChild(style);
                 }
 
-                // Toggle “hover” class inside a featured iframe
+                // Toggle “hover” class inside a spotlight iframe
                 function toggleHover(doc, add = true) {
                     const slide = doc.querySelector('.slide');
                     if (slide) slide.classList.toggle('hover', add);
@@ -776,10 +791,11 @@
 					  right: '3em',
 					  maxWidth: '30vw',
 					  maxHeight: '500px',
-					  zIndex: 999,
+					  zIndex: 1,
 					  pointerEvents: 'none'
 					});
-					doc.body.appendChild(clearArtEl);
+					const osdBottom = doc.querySelector('.videoOsdBottom') || doc.querySelector('.playerControlsContainer') || doc.body;
+					osdBottom.appendChild(clearArtEl);
 				  }
 				  try {
 					const artMeta = await fetch(`/Items/${itemId}?fields=SeriesId&api_key=${token}`, { credentials: 'same-origin' })
@@ -838,8 +854,8 @@
 								box-shadow: 0 0 20px 20px rgba(0, 0, 0, 0.5);
 								background-color: rgba(0, 0, 0, 0.5);
 								
-								   /*  optional subtle inner shading */
-								  //inset -5px -5px 20px rgba(0, 0, 0, 0.6);
+								   /*  optional subtle inner shading 
+								  inset -5px -5px 20px rgba(0, 0, 0, 0.6); */
 
 								pointer-events: none;
 								z-index: 998;
@@ -906,7 +922,7 @@
                                 top:            '10px',
                                 left:           '20px',
                                 maxWidth:       '25vw',
-                                // maxHeight:      '400px',
+                                maxHeight:      '20vh',
                                 transformOrigin:'top left',
                                 zIndex:         999
                             };
@@ -925,9 +941,11 @@
                                         img.src = `/Items/${id}/Images/Logo`;
                                         img.alt = 'Jellyfin Logo';
                                         Object.assign(img.style, logoStyles);
-                                        const headerTop = jellyfin.document.querySelector('.osdHeader .headerTop');
+										const headerTop = jellyfin.document.querySelector('.osdHeader .headerTop');
                                         if (headerTop) {
-                                            img.style.position = 'absolute';
+										    headerTop.style.overflowY = 'visible';
+											headerTop.style.overflowX = 'hidden';
+											img.style.position = 'absolute';
                                             headerTop.appendChild(img);
                                         }
                                         console.log('Logo injector: logo loaded for', id);
@@ -971,7 +989,7 @@
                     let processed = [];
 
                     elements.forEach(el => {
-                        if (el.classList.contains('featurediframe') && isElementVisible(el)) {
+                        if (el.classList.contains('spotlightiframe') && isElementVisible(el)) {
                             const iframeDoc = el.contentDocument || el.contentWindow.document;
                             if (iframeDoc) {
 							// grab the same highlightColor you use for the main doc
@@ -1109,12 +1127,12 @@
 					if (previousElement) {
 						previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
 						if (previousElement.classList.contains('clickable-overlay')) {
-							const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+							const iframe = jellyfin.document.querySelector('iframe.spotlightiframe');
 							if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
 						}
 					}
 					if (previousElement?.id === 'mediaButton') {
-						const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+						const iframe = jellyfin.document.querySelector('iframe.spotlightiframe');
 						if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
 					}
 
@@ -1127,7 +1145,7 @@
 
 					// If it’s an iframe overlay or the mediaButton, force the hover state
 					if (newEl.classList.contains('clickable-overlay') || newEl.id === 'mediaButton') {
-						const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+						const iframe = jellyfin.document.querySelector('iframe.spotlightiframe');
 						if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, true);
 					}
 
@@ -1141,14 +1159,14 @@
                     const url = window.top.location.href;
                     let first = null;
 
-                    // 1) If on home page, focus rightButton inside featured iframe
+                    // 1) If on home page, focus rightButton inside spotlight iframe
                     if (url.includes('#/home')) {
 						// always clear out any old focus
 						previousElement = null;
 						currentRow = currentCol = -1;
 
 						// then re-find the first “rightButton” in the iframe
-						const iframe = jellyfin.document.querySelector('.featurediframe');
+						const iframe = jellyfin.document.querySelector('.spotlightiframe');
 						const btn    = iframe?.contentDocument?.querySelector('#rightButton');
 						if (btn && isElementVisible(btn)) {
 						  first = btn;
@@ -1218,9 +1236,9 @@
                     const active = focusableElements[currentRow][currentCol];
                     console.log('Enter pressed on:', describe(active));
 
-                    // If it’s a video player inside a featured iframe, toggle playback via “k” key
+                    // If it’s a video player inside a spotlight iframe, toggle playback via “k” key
                     if (active.classList.contains('video-player') || active.querySelector('.video-player')) {
-                        const spotIframe = jellyfin.document.querySelector('.featurediframe');
+                        const spotIframe = jellyfin.document.querySelector('.spotlightiframe');
                         if (spotIframe?.contentWindow?.controlYouTubePlayer) {
                             spotIframe.contentWindow.controlYouTubePlayer.toggle();
                             skipFocusReset = true;
@@ -1243,7 +1261,7 @@
                         if (previousElement) {
                             previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
                             if (previousElement.classList.contains('clickable-overlay')) {
-                                const iframe = jellyfin.document.querySelector('iframe.featurediframe');
+                                const iframe = jellyfin.document.querySelector('iframe.spotlightiframe');
                                 if (iframe) toggleHover(iframe.contentDocument || iframe.contentWindow.document, false);
                             }
                         }
@@ -1304,61 +1322,137 @@
                             break;
 
                         case 'ArrowLeft':
-                        case 'ArrowRight': {
-                            const direction = e.key === 'ArrowLeft' ? -1 : 1;
-                            const slider = jellyfin.document.querySelector('.osdPositionSlider');
-                            // If slider is visible and we are in simple OSD (no extras), let native behavior run after focusing
-                            if (slider && isElementVisible(slider) && !osdExtrasActive) {
-                                if (previousElement) {
-                                    previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
-                                }
-                                previousElement = slider;
-                                slider.classList.add('keyboard-nav-highlight');
-                                slider.focus();
-                                scrollIntoView(slider);
-                                return;
-                            }
-                            // If in OSD extras, navigate within the extras overlay
-                            if (osdExtrasActive) {
-                                moveFocus(0, direction);
-                                e.preventDefault();
-                                e.stopPropagation();
-                                break;
-                            }
-                            // Otherwise, fallback navigation: move focus in main grid
-                            moveFocus(0, direction);
-                            e.preventDefault();
-                            break;
-                        }
+						case 'ArrowRight': {
+						  const direction = e.key === 'ArrowLeft' ? -1 : 1;
+						  const slider = jellyfin.document.querySelector('.osdPositionSlider');
 
-                        case 'Enter':
-                            if (nowPlayingMode && !osdExtrasActive) {
-                                // On video page, if extras are not shown, intercept Enter to toggle playback
-                                e.preventDefault();
-                                e.stopPropagation();
+						  // In OSD extras: left/right navigates the overlay
+						  if (osdExtrasActive) {
+							moveFocus(0, direction);
+							e.preventDefault();
+							e.stopPropagation();
+							break;
+						  }
 
-                                const btnPause = jellyfin.document.querySelector('.btnPause');
-                                if (btnPause) {
-                                    if (previousElement) {
-                                        previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron', 'video-focused');
-                                    }
-                                    previousElement = btnPause;
-                                    btnPause.classList.add('keyboard-nav-highlight');
-                                }
-                                const kEvent = new KeyboardEvent('keydown', {
-                                    key: 'k',
-                                    code: 'KeyK',
-                                    bubbles: true,
-                                    cancelable: true
-                                });
-                                jellyfin.document.dispatchEvent(kEvent);
-                                return;
-                            }
-                            // Otherwise, handle Enter normally (invoke `handleEnter`)
-                            handleEnter();
-                            e.preventDefault();
-                            e.stopPropagation();
-                            break;
+						  // Simple OSD: visually “grab” the progress bar (Windows + Android)
+						  if (slider && isElementVisible(slider)) {
+							const realSlider = (typeof getVisibleSliderEl === 'function')
+							  ? getVisibleSliderEl()
+							  : slider;
+							const proxy = (typeof ensureSliderProxy === 'function')
+							  ? ensureSliderProxy()
+							  : null;
+
+							if (previousElement) {
+							  previousElement.classList.remove('keyboard-nav-highlight', 'highlight-chevron');
+							}
+							previousElement = realSlider || proxy;
+
+							if (realSlider) {
+							  realSlider.classList.add('keyboard-nav-highlight');
+							  if (!realSlider.hasAttribute('tabindex')) realSlider.tabIndex = 0;
+							  try { realSlider.focus({ preventScroll: true }); } catch { realSlider.focus(); }
+							  scrollIntoView(realSlider);
+							} else if (proxy) {
+							  proxy.classList.add('keyboard-nav-highlight');
+							}
+
+							e.preventDefault();
+							e.stopPropagation();
+							break;
+						  }
+
+						  // Fallback: move focus in main grid
+						  moveFocus(0, direction);
+						  e.preventDefault();
+						  break;
+						}
+
+						case 'Enter':
+						if (nowPlayingMode && !osdExtrasActive) {
+							e.preventDefault();
+							e.stopPropagation();
+
+							const upNextStart = jellyfin.document.querySelector(
+								'button.upNextDialog-button.btnStartNow'
+							);
+							const upNextHide = jellyfin.document.querySelector(
+								'button.upNextDialog-button.btnHide'
+							);
+
+							// If UpNext dialog is visible
+							if ((upNextStart && isElementVisible(upNextStart)) ||
+								(upNextHide && isElementVisible(upNextHide))) {
+
+								// If first time hitting Enter while UpNext visible → move focus to Start Now
+								if (previousElement !== upNextStart && previousElement !== upNextHide) {
+									if (previousElement) {
+										previousElement.classList.remove(
+											'keyboard-nav-highlight',
+											'highlight-chevron',
+											'video-focused'
+										);
+									}
+									if (upNextStart) {
+										upNextStart.classList.add('keyboard-nav-highlight');
+										upNextStart.focus();
+										previousElement = upNextStart;
+
+										// 🔑 Re-anchor focus grid to UpNext row
+										updateFocusableElements();
+										for (let r = 0; r < focusableElements.length; r++) {
+											const c = focusableElements[r].indexOf(upNextStart);
+											if (c !== -1) {
+												currentRow = r;
+												currentCol = c;
+												break;
+											}
+										}
+									}
+									return;
+								}
+
+								// If Start Now is focused → activate it
+								if (previousElement === upNextStart) {
+									upNextStart.click();
+									return;
+								}
+
+								// If Hide is focused → let Jellyfin handle it
+								if (previousElement === upNextHide) {
+									upNextHide.click();
+									return;
+								}
+							}
+
+							// Otherwise fall back to Pause/playback toggle
+							const btnPause = jellyfin.document.querySelector('.btnPause');
+							if (btnPause) {
+								if (previousElement) {
+									previousElement.classList.remove(
+										'keyboard-nav-highlight',
+										'highlight-chevron',
+										'video-focused'
+									);
+								}
+								// btnPause.classList.add('keyboard-nav-highlight');
+								previousElement = btnPause;
+							}
+							const kEvent = new KeyboardEvent('keydown', {
+								key: 'k',
+								code: 'KeyK',
+								bubbles: true,
+								cancelable: true
+							});
+							jellyfin.document.dispatchEvent(kEvent);
+							return;
+						}
+
+						// Fallback normal handling
+						handleEnter();
+						e.preventDefault();
+						e.stopPropagation();
+						break;
                     }
                 }
 
@@ -1381,8 +1475,6 @@
 				}
 
 				/* then hook it up as before:*/
-				window.addEventListener('hashchange',   handleLocationChange);
-				window.addEventListener('popstate',     handleLocationChange);
 				const _pushState = history.pushState;
 				history.pushState = function(...args) {
 				  _pushState.apply(this, args);
@@ -1456,8 +1548,8 @@
                     });
                     mutationObserver.observe(jellyfin.document.body, { childList: true, subtree: true });
 
-                    // For any existing featured iframes, inject styles and hover logic
-                    jellyfin.document.querySelectorAll('iframe.featurediframe').forEach(iframe => {
+                    // For any existing spotlight iframes, inject styles and hover logic
+                    jellyfin.document.querySelectorAll('iframe.spotlightiframe').forEach(iframe => {
                         handleIframeLoad(iframe);
                         iframe.removeEventListener('load', handleIframeLoad);
                         iframe.addEventListener('load', () => handleIframeLoad(iframe), { passive: true });
@@ -1479,7 +1571,7 @@
                     }, 3000);
                 }
 
-                // Called whenever a featured iframe loads
+                // Called whenever a spotlight iframe loads
                 function handleIframeLoad(iframe) {
 					const doc = iframe.contentDocument || iframe.contentWindow.document;
 					if (doc) {
